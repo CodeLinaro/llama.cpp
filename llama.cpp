@@ -2182,6 +2182,8 @@ struct llama_context {
 #endif
     ggml_backend_t backend_cpu = nullptr;
 
+    ggml_compute_threadpool_t threadpool = nullptr;
+
     const llama_model & model;
 
     // key + value cache for the self attention
@@ -11073,7 +11075,7 @@ static void llama_graph_compute(
         ggml_backend_cpu_set_abort_callback(lctx.backend_cpu, lctx.abort_callback, lctx.abort_callback_data);
     }
 
-    ggml_backend_sched_graph_compute_async(lctx.sched, gf);
+    ggml_backend_sched_graph_compute_async(lctx.sched, gf, lctx.threadpool);
 
     // fprintf(stderr, "splits: %d\n", ggml_backend_sched_get_n_splits(lctx.sched));
 }
@@ -15083,7 +15085,7 @@ static int llama_apply_lora_from_file_internal(
             return 1;
         }
 
-        ggml_backend_graph_compute(backend_cpu, gf);
+        ggml_backend_graph_compute(backend_cpu, gf, nullptr);
 
         ggml_backend_tensor_set(model_t, r->data, 0, ggml_nbytes(r));
 
@@ -15248,6 +15250,17 @@ void llama_numa_init(enum ggml_numa_strategy numa) {
     if (numa != GGML_NUMA_STRATEGY_DISABLED) {
         ggml_numa_init(numa);
     }
+}
+
+void llama_attach_threadpool(
+             struct llama_context * ctx,
+        ggml_compute_threadpool_t   threadpool) {
+    ctx->threadpool = threadpool;
+    ggml_resume_threadpool(threadpool);
+}
+
+LLAMA_API void llama_detach_threadpool(struct llama_context * ctx) {
+    ctx->threadpool = nullptr;
 }
 
 void llama_backend_free(void) {
