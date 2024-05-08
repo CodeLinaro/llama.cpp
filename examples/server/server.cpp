@@ -2632,7 +2632,7 @@ static void server_params_parse(int argc, char ** argv, server_params & sparams,
                 invalid_param = true;
                 break;
             }
-            params.cpuparams.n_threads_batch = std::stoi(argv[i]);
+            params.cpuparams_batch.n_threads = std::stoi(argv[i]);
         } else if (arg == "--threads-http") {
             if (++i >= argc) {
                 invalid_param = true;
@@ -2944,7 +2944,7 @@ int main(int argc, char ** argv) {
 
     LOG_INFO("system info", {
         {"n_threads",       params.cpuparams.n_threads},
-        {"n_threads_batch", params.cpuparams.n_threads_batch},
+        {"n_threads_batch", params.cpuparams_batch.n_threads},
         {"total_threads",   std::thread::hardware_concurrency()},
         {"system_info",     llama_print_system_info()},
     });
