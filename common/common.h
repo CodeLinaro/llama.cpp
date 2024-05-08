@@ -50,7 +50,6 @@ int32_t get_num_physical_cores();
 
 struct cpu_params {
     int32_t  n_threads                 = get_math_cpu_count();
-    int32_t  n_threads_batch           = -1;      // number of threads to use for batch processing (-1 = use n_threads)
     bool     cpumask[GGML_N_CORES_MAX] = {false}; // CPU affinity mask.
     bool     mask_valid                = false;   // Default: any CPU
     int32_t  priority                  =  0;      // Scheduling prio : (0 - normal, 1 - medium, 2 - high, 3 - realtime)
@@ -94,7 +93,9 @@ struct gpt_params {
     void * cb_eval_user_data                 = nullptr;
 
     struct cpu_params cpuparams;
+    struct cpu_params cpuparams_batch;
     struct cpu_params draft_cpuparams;
+    struct cpu_params draft_cpuparams_batch;
 
     ggml_numa_strategy numa = GGML_NUMA_STRATEGY_DISABLED;
 

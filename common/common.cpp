@@ -379,17 +379,6 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
         }
         return true;
     }
-    if (arg == "-tb" || arg == "--threads-batch") {
-        if (++i >= argc) {
-            invalid_param = true;
-            return true;
-        }
-        params.cpuparams.n_threads_batch = std::stoi(argv[i]);
-        if (params.cpuparams.n_threads_batch <= 0) {
-            params.cpuparams.n_threads_batch = std::thread::hardware_concurrency();
-        }
-        return true;
-    }
     if (arg == "-C" || arg == "--cpu-mask") {
         if (++i >= argc) {
             invalid_param = true;
@@ -426,6 +415,53 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
         params.cpuparams.poll = true;
         return true;
     }
+    if (arg == "-tb" || arg == "--threads-batch") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.cpuparams_batch.n_threads = std::stoi(argv[i]);
+        if (params.cpuparams_batch.n_threads <= 0) {
+            params.cpuparams_batch.n_threads = std::thread::hardware_concurrency();
+        }
+        return true;
+    }
+    if (arg == "-Cb" || arg == "--cpu-mask-batch") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        std::string mask = argv[i];
+        params.cpuparams_batch.mask_valid = true;
+        invalid_param = !parse_cpu_mask(mask, params.cpuparams_batch.cpumask);
+        return true;
+    }
+    if (arg == "-Crb" || arg == "--cpu-range_batch") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        std::string range = argv[i];
+        params.cpuparams_batch.mask_valid = true;
+        invalid_param = !parse_cpu_range(range, params.cpuparams_batch.cpumask);
+        return true;
+    }
+    if (arg == "--prio-batch") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.cpuparams_batch.priority = std::stoul(argv[i]);
+        return true;
+    }
+    if (arg == "--cpu-strict-batch") {
+        params.cpuparams_batch.strict_cpu = true;
+        return true;
+    }
+    if (arg == "--poll-batch") {
+        params.cpuparams_batch.poll = true;
+        return true;
+    }
     if (arg == "-td" || arg == "--threads-draft") {
         if (++i >= argc) {
             invalid_param = true;
@@ -434,17 +470,6 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
         params.draft_cpuparams.n_threads = std::stoi(argv[i]);
         if (params.draft_cpuparams.n_threads <= 0) {
             params.draft_cpuparams.n_threads = std::thread::hardware_concurrency();
-        }
-        return true;
-    }
-    if (arg == "-tbd" || arg == "--threads-batch-draft") {
-        if (++i >= argc) {
-            invalid_param = true;
-            return true;
-        }
-        params.draft_cpuparams.n_threads_batch = std::stoi(argv[i]);
-        if (params.draft_cpuparams.n_threads_batch <= 0) {
-            params.draft_cpuparams.n_threads_batch = std::thread::hardware_concurrency();
         }
         return true;
     }
@@ -482,6 +507,53 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
     }
     if (arg == "--poll-draft") {
         params.draft_cpuparams.poll = true;
+        return true;
+    }
+    if (arg == "-tdb" || arg == "--threads-draft-batch") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.draft_cpuparams_batch.n_threads = std::stoi(argv[i]);
+        if (params.draft_cpuparams_batch.n_threads <= 0) {
+            params.draft_cpuparams_batch.n_threads = std::thread::hardware_concurrency();
+        }
+        return true;
+    }
+    if (arg == "-Cdb" || arg == "--cpu-mask-draft-batch") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        std::string mask = argv[i];
+        params.draft_cpuparams_batch.mask_valid = true;
+        invalid_param = !parse_cpu_mask(mask, params.draft_cpuparams_batch.cpumask);
+        return true;
+    }
+    if (arg == "-Crdb" || arg == "--cpu-range-draft-batch") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        std::string range = argv[i];
+        params.draft_cpuparams_batch.mask_valid = true;
+        invalid_param = !parse_cpu_range(range, params.draft_cpuparams_batch.cpumask);
+        return true;
+    }
+    if (arg == "--prio-draft-batch") {
+        if (++i >= argc) {
+            invalid_param = true;
+            return true;
+        }
+        params.draft_cpuparams_batch.priority = std::stoul(argv[i]);
+        return true;
+    }
+    if (arg == "--cpu-strict-draft-batch") {
+        params.draft_cpuparams_batch.strict_cpu = true;
+        return true;
+    }
+    if (arg == "--poll-draft_batch") {
+        params.draft_cpuparams_batch.poll = true;
         return true;
     }
     if (arg == "-p" || arg == "--prompt") {
@@ -1523,19 +1595,12 @@ static void postprocess_cpu_params(struct cpu_params& cpuparams) {
     }
     if (n_set == 0) {
         // You hit the jackpot!
-        for (int32_t i = 0; i < GGML_N_CORES_MAX; i++) {
-            cpuparams.cpumask[i] = true;
-        }
+        memset(&cpuparams.cpumask[0], 1, GGML_N_CORES_MAX);
         n_set = GGML_N_CORES_MAX;
     }
     if (n_set < cpuparams.n_threads) {
         // Not enough set bits, may experience performance issues.
         fprintf(stderr, "warn: Not enough set bits in CPU mask (%d) to satisfy requested thread count: %d\n", n_set, cpuparams.n_threads);
-    }
-    if (n_set < cpuparams.n_threads_batch) {
-        // Not enough set bits, may experience performance issues during batch processing.
-        fprintf(stderr, "warn: Not enough set bits in CPU mask (%d) to satisfy requested thread count: %d\n", n_set, cpuparams.n_threads_batch);
-
     }
 }
 
@@ -1560,7 +1625,9 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
     }
 
     postprocess_cpu_params(params.cpuparams);
+    postprocess_cpu_params(params.cpuparams_batch);
     postprocess_cpu_params(params.draft_cpuparams);
+    postprocess_cpu_params(params.draft_cpuparams_batch);
 
     if (params.prompt_cache_all &&
             (params.interactive || params.interactive_first ||
@@ -1623,20 +1690,36 @@ void gpt_print_usage(int /*argc*/, char ** argv, const gpt_params & params) {
     printf("                        number of threads to use during batch and prompt processing (default: same as --threads)\n");
     printf("  -C M, --cpu-mask M    CPU affinity mask: arbitrarily long hex. Takes precedence over cpu-range (default: \"\")\n");
     printf("  -Cr --cpu-range lo-hi Ranges of CPUs for affinity (alternative to --cpu-mask)\n");
+    printf("  -Cb M, --cpu-mask-batch M\n");
+    printf("                        CPU affinity mask: arbitrarily long hex. Takes precedence over cpu-range (default: \"\")\n");
+    printf("  -Crb --cpu-range-batch lo-hi\n");
+    printf("                        Ranges of CPUs for affinity (alternative to --cpu-mask)\n");
     printf("  --cpu-strict          Use strict CPU placement (default: %u)\n", (unsigned) params.cpuparams.strict_cpu);
+    printf("  --cpu-strict-batch    Use strict CPU placement (default: %u)\n", (unsigned) params.cpuparams.strict_cpu);
     printf("  --priority N          Set process/thread priority : 0-normal, 1-medium, 2-high, 3-realtime (default: %d)\n", params.cpuparams.priority);
+    printf("  --priority-batch N    Set process/thread priority : 0-normal, 1-medium, 2-high, 3-realtime (default: %d)\n", params.cpuparams.priority);
     printf("  --poll                Use polling to wait for work (default: %u)\n", (unsigned) params.cpuparams.poll);
+    printf("  --poll-batch          Use polling to wait for work (default: %u)\n", (unsigned) params.cpuparams.poll);
     printf("  -td N, --threads-draft N");
     printf("                        number of threads to use during generation for draft model (default: same as --threads)\n");
-    printf("  -tbd N, --threads-batch-draft N\n");
+    printf("  -tdb N, --threads-draft-batch N\n");
     printf("                        number of threads to use during batch and prompt processing for draft model (default: same as --threads-draft)\n");
     printf("  -Cd M, --cpu-mask-draft M\n");
     printf("                        Draft model CPU affinity mask. Takes precedence over cpu-range-draft (default: \"\")\n");
     printf("  -Crd --cpu-range-draft lo-hi\n");
     printf("                        Ranges of CPUs for affinity (alternative to --cpu-mask-draft)\n");
+    printf("  -Cdb M, --cpu-mask-draft-batch M\n");
+    printf("                        Draft model CPU affinity mask. Takes precedence over cpu-range-draft (default: \"\")\n");
+    printf("  -Crdb --cpu-range-draft-batch lo-hi\n");
+    printf("                        Ranges of CPUs for affinity (alternative to --cpu-mask-draft)\n");
     printf("  --cpu-strict-draft    Use strict CPU placement for draft model (default: %u)\n", (unsigned) params.draft_cpuparams.strict_cpu);
+    printf("  --cpu-strict-draft-batch\n");
+    printf("                        Use strict CPU placement for draft model (default: %u)\n", (unsigned) params.draft_cpuparams.strict_cpu);
     printf("  --priority-draft N    Set draft process/thread priority : 0-normal, 1-medium, 2-high, 3-realtime (default: %d)\n", params.draft_cpuparams.priority);
+    printf("  --priority-draft-batch N\n");
+    printf("                        Set draft process/thread priority : 0-normal, 1-medium, 2-high, 3-realtime (default: %d)\n", params.draft_cpuparams.priority);
     printf("  --poll-draft          Use polling to wait for draft model work (default: %u)\n", (unsigned) params.draft_cpuparams.poll);
+    printf("  --poll-draft-batch    Use polling to wait for draft model work (default: %u)\n", (unsigned) params.draft_cpuparams.poll);
     printf("  -p PROMPT, --prompt PROMPT\n");
     printf("                        prompt to start generation with (default: empty)\n");
     printf("  -e, --escape          process prompt escapes sequences (\\n, \\r, \\t, \\', \\\", \\\\)\n");
@@ -1809,8 +1892,8 @@ std::string get_system_info(const gpt_params & params) {
     std::ostringstream os;
 
     os << "system_info: n_threads = " << params.cpuparams.n_threads;
-    if (params.cpuparams.n_threads_batch != -1) {
-        os << " (n_threads_batch = " << params.cpuparams.n_threads_batch << ")";
+    if (params.cpuparams_batch.n_threads != -1) {
+        os << " (n_threads_batch = " << params.cpuparams_batch.n_threads << ")";
     }
     os << " / " << std::thread::hardware_concurrency() << " | " << llama_print_system_info();
 
@@ -2080,8 +2163,8 @@ struct llama_context_params llama_context_params_from_gpt_params(const gpt_param
     cparams.n_batch           = params.n_batch;
     cparams.n_ubatch          = params.n_ubatch;
     cparams.n_threads         = params.cpuparams.n_threads;
-    cparams.n_threads_batch   = params.cpuparams.n_threads_batch == -1 ?
-                                    params.cpuparams.n_threads : params.cpuparams.n_threads_batch;
+    cparams.n_threads_batch   = params.cpuparams_batch.n_threads == -1 ?
+                                    params.cpuparams.n_threads : params.cpuparams_batch.n_threads;
     cparams.seed              = params.seed;
     cparams.logits_all        = params.logits_all;
     cparams.embeddings        = params.embedding;
@@ -2109,20 +2192,18 @@ struct llama_context_params llama_context_params_from_gpt_params(const gpt_param
 struct ggml_threadpool_params ggml_threadpool_params_from_cpu_params(const cpu_params & params) {
     struct ggml_threadpool_params tpp;
 
+    tpp.mask_specified = params.mask_valid;
     if (params.mask_valid) {
         std::memcpy(&tpp.cpumask, &params.cpumask, GGML_N_CORES_MAX);
-        tpp.mask_specified = true;
-    } else {
-        tpp.mask_specified = false;
     }
-    tpp.n_threads  = params.n_threads > params.n_threads_batch ? params.n_threads : params.n_threads_batch;
+
+    tpp.n_threads  = params.n_threads;
     tpp.prio       = params.priority;
     tpp.poll       = params.poll;
     tpp.strict_cpu = params.strict_cpu;
 
     return tpp;
 }
-
 
 void llama_batch_clear(struct llama_batch & batch) {
     batch.n_tokens = 0;
