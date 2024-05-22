@@ -1586,8 +1586,18 @@ void gpt_params_handle_model_default(gpt_params & params) {
     }
 }
 
-static void postprocess_cpu_params(struct cpu_params& cpuparams) {
+static void postprocess_cpu_params(cpu_params& cpuparams, const cpu_params* role_model = nullptr) {
     int32_t n_set = 0;
+
+    if (cpuparams.n_threads < 0) {
+        // Assuming everything about cpuparams is invalid
+        if (role_model != nullptr) {
+            cpuparams = *role_model;
+        } else {
+            cpuparams.n_threads = get_math_cpu_count();
+        }
+    }
+
     for (int32_t i = 0; i < GGML_N_CORES_MAX; i++) {
         if (cpuparams.cpumask[i]) {
             n_set++;
@@ -1624,10 +1634,10 @@ bool gpt_params_parse_ex(int argc, char ** argv, gpt_params & params) {
         }
     }
 
-    postprocess_cpu_params(params.cpuparams);
-    postprocess_cpu_params(params.cpuparams_batch);
-    postprocess_cpu_params(params.draft_cpuparams);
-    postprocess_cpu_params(params.draft_cpuparams_batch);
+    postprocess_cpu_params(params.cpuparams, nullptr);
+    postprocess_cpu_params(params.cpuparams_batch, &params.cpuparams);
+    postprocess_cpu_params(params.draft_cpuparams, &params.cpuparams);
+    postprocess_cpu_params(params.draft_cpuparams_batch, &params.cpuparams_batch);
 
     if (params.prompt_cache_all &&
             (params.interactive || params.interactive_first ||
