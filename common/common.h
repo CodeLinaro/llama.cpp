@@ -49,7 +49,7 @@ int32_t get_num_physical_cores();
 //
 
 struct cpu_params {
-    int32_t  n_threads                 = get_math_cpu_count();
+    int32_t  n_threads                 = -1;
     bool     cpumask[GGML_N_CORES_MAX] = {false}; // CPU affinity mask.
     bool     mask_valid                = false;   // Default: any CPU
     int32_t  priority                  =  0;      // Scheduling prio : (0 - normal, 1 - medium, 2 - high, 3 - realtime)
