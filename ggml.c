@@ -19951,11 +19951,12 @@ static bool __thread_priority(int32_t prio) {
 #include <sys/types.h>
 #include <sys/resource.h>
 
-bool __thread_affinity(const bool * mask) {
+static bool __thread_affinity(const bool * mask) {
+    UNUSED(mask);
     return true;
 }
 
-bool __process_priority(int32_t prio) {
+static bool __process_priority(int32_t prio) {
     int32_t p = 0;
 
     switch (prio) {
@@ -19969,7 +19970,8 @@ bool __process_priority(int32_t prio) {
     return r != -1;
 }
 
-bool __thread_priority(int32_t prio) {
+static bool __thread_priority(int32_t prio) {
+    UNUSED(prio);
     return true;
 }
 
