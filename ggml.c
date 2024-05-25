@@ -19886,7 +19886,7 @@ enum {
 #include "windows.h"
 
 // TODO: support > 64 CPUs
-static bool __thread_affinity(const bool * mask) {
+static bool __thread_affinity(bool * mask) {
     HANDLE    h = GetCurrentThread();
     uint64_t  bitmask = 0ULL;
 
@@ -19913,7 +19913,7 @@ static bool __thread_affinity(const bool * mask) {
         }
     }
 
-    DWORD_PTR m = mask;
+    DWORD_PTR m = (DWORD_PTR)mask;
 
     m = SetThreadAffinityMask(h, m);
 
