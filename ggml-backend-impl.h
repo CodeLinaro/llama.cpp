@@ -97,6 +97,7 @@ extern "C" {
 
         // compute graph with a plan
         enum ggml_status (*GGML_CALL graph_plan_compute)(ggml_backend_t backend, ggml_backend_graph_plan_t plan);
+
         // compute graph without a plan (async)
         enum ggml_status (*GGML_CALL graph_compute)     (ggml_backend_t backend, struct ggml_cgraph * cgraph);
 
