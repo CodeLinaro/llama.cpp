@@ -421,9 +421,6 @@ class Model:
         # NOTE: if you get an error here, you need to update the convert-hf-to-gguf-update.py script
         #       or pull the latest version of the model from Huggingface
         #       don't edit the hashes manually!
-        if chkhsh == "0ef9807a4087ebef797fc749390439009c3b9eda9ad1a097abbe738f486c01e5":
-            # ref: https://huggingface.co/meta-llama/Meta-Llama-3-8B
-            res = "llama-bpe"
         if chkhsh == "049ecf7629871e3041641907f3de7c733e4dbfdc736f57d882ba0b0845599754":
             # ref: https://huggingface.co/deepseek-ai/deepseek-llm-7b-base
             res = "deepseek-llm"
@@ -451,18 +448,12 @@ class Model:
         if chkhsh == "6221ad2852e85ce96f791f476e0b390cf9b474c9e3d1362f53a24a06dc8220ff":
             # ref: https://huggingface.co/smallcloudai/Refact-1_6-base
             res = "refact"
-        if chkhsh == "9c2227e4dd922002fb81bde4fc02b0483ca4f12911410dee2255e4987644e3f8":
-            # ref: https://huggingface.co/CohereForAI/c4ai-command-r-v01
-            res = "command-r"
         if chkhsh == "e636dc30a262dcc0d8c323492e32ae2b70728f4df7dfe9737d9f920a282b8aea":
             # ref: https://huggingface.co/Qwen/Qwen1.5-7B
             res = "qwen2"
         if chkhsh == "b6dc8df998e1cfbdc4eac8243701a65afe638679230920b50d6f17d81c098166":
             # ref: https://huggingface.co/allenai/OLMo-1.7-7B-hf
             res = "olmo"
-        if chkhsh == "a8594e3edff7c29c003940395316294b2c623e09894deebbc65f33f1515df79e":
-            # ref: https://huggingface.co/databricks/dbrx-base
-            res = "dbrx"
         if chkhsh == "0876d13b50744004aa9aeae05e7b0647eac9d801b5ba4668afc01e709c15e19f":
             # ref: https://huggingface.co/jinaai/jina-embeddings-v2-base-en
             res = "jina-v2-en"
@@ -478,6 +469,9 @@ class Model:
         if chkhsh == "7967bfa498ade6b757b064f31e964dddbb80f8f9a4d68d4ba7998fcf281c531a":
             # ref: https://huggingface.co/jinaai/jina-embeddings-v2-base-code
             res = "jina-v2-code"
+        if chkhsh == "b53802fb28e26d645c3a310b34bfe07da813026ec7c7716883404d5e0f8b1901":
+            # ref: https://huggingface.co/core42/jais-13b
+            res = "jais"
 
         if res is None:
             logger.warning("\n")
@@ -2712,6 +2706,87 @@ class DeepseekV2Model(Model):
             experts = [k for d in self._experts for k in d.keys()]
             if len(experts) > 0:
                 raise ValueError(f"Unprocessed experts: {experts}")
+
+
+
+
+
+
+
+
+
+
+
+@Model.register("JAISLMHeadModel")
+class JaisModel(Model):
+    model_arch = gguf.MODEL_ARCH.JAIS
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # # the HF config claims n_ctx=8192, but it uses RoPE scaling
+        # self.hparams["n_ctx"] = 2048
+
+        # SwigLU activation
+        assert self.hparams["activation_function"] == "swiglu"
+
+        # ALiBi position embedding
+        assert self.hparams["position_embedding_type"] == "alibi"
+
+    def set_vocab(self):
+        self._set_vocab_gpt2()
+
+    def set_gguf_parameters(self):
+        hparams = self.hparams
+        block_count = hparams["n_layer"]
+
+        # self.gguf_writer.add_name(self.dir_model.name)
+        # self.gguf_writer.add_context_length(hparams["max_position_embeddings"])
+        # self.gguf_writer.add_embedding_length(hparams["hidden_size"])
+        # self.gguf_writer.add_block_count(block_count)
+        # self.gguf_writer.add_feed_forward_length(hparams["intermediate_size"])
+        # self.gguf_writer.add_head_count(hparams["num_attention_heads"])
+        # self.gguf_writer.add_head_count_kv(self.hparams["num_key_value_heads"] if "num_key_value_heads" in hparams else hparams["num_attention_heads"])
+        # self.gguf_writer.add_layer_norm_rms_eps(self.hparams["rms_norm_eps"])
+        # self.gguf_writer.add_key_length(hparams["head_dim"])
+        # self.gguf_writer.add_value_length(hparams["head_dim"])
+        # self.gguf_writer.add_file_type(self.ftype)
+
+
+        #self.gguf_writer.add_rope_freq_base(self.hparams["rotary_emb_base"])
+     #          self.gguf_writer.add_max_alibi_bias(self.hparams["attn_config"]["alibi_bias_max"])
+
+    def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
+        del bid  # unused
+
+        # lm_head is not used in llama.cpp, while autoawq will include this tensor in model
+        # To prevent errors, skip loading lm_head.weight.
+        if name == "lm_head.weight":
+            logger.debug(f"Skipping get tensor {name!r} in safetensors so that convert can end normally.")
+            return []
+
+        # ref: https://github.com/huggingface/transformers/blob/fc37f38915372c15992b540dfcbbe00a916d4fc6/src/transformers/models/gemma/modeling_gemma.py#L89
+        if name.endswith("norm.weight"):
+            data_torch = data_torch + 1
+
+        return [(self.map_tensor_name(name), data_torch)]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 ###### CONVERSION LOGIC ######
