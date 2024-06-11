@@ -2724,52 +2724,75 @@ class JaisModel(Model):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        # # the HF config claims n_ctx=8192, but it uses RoPE scaling
-        # self.hparams["n_ctx"] = 2048
-
         # SwigLU activation
         assert self.hparams["activation_function"] == "swiglu"
-
         # ALiBi position embedding
         assert self.hparams["position_embedding_type"] == "alibi"
 
     def set_vocab(self):
-        self._set_vocab_gpt2()
+        tokens, toktypes, tokpre = self.get_vocab_base()
+        self.vocab_size = len(tokens)
+
+        # we need this to validate the size of the token_type embeddings
+        # though currently we are passing all zeros to the token_type embeddings
+        self.gguf_writer.add_token_type_count(2)  # "Sequence A" or "Sequence B"
+
+        # convert to phantom space vocab
+        def phantom(tok):
+            if tok.startswith("[") and tok.endswith("]"):
+                return tok
+            if tok.startswith("##"):
+                return tok[2:]
+            return "\u2581" + tok
+        tokens = list(map(phantom, tokens))
+
+        # add vocab to gguf
+        self.gguf_writer.add_tokenizer_model("bert")
+        self.gguf_writer.add_tokenizer_pre(tokpre)
+        self.gguf_writer.add_token_list(tokens)
+        self.gguf_writer.add_token_types(toktypes)
+
+        # handle special tokens
+        special_vocab = gguf.SpecialVocab(self.dir_model, n_vocab=len(tokens))
+        special_vocab.add_to_gguf(self.gguf_writer)
+        #self._set_vocab_gpt2()
 
     def set_gguf_parameters(self):
-        hparams = self.hparams
-        block_count = hparams["n_layer"]
-
-        # self.gguf_writer.add_name(self.dir_model.name)
-        # self.gguf_writer.add_context_length(hparams["max_position_embeddings"])
-        # self.gguf_writer.add_embedding_length(hparams["hidden_size"])
-        # self.gguf_writer.add_block_count(block_count)
-        # self.gguf_writer.add_feed_forward_length(hparams["intermediate_size"])
-        # self.gguf_writer.add_head_count(hparams["num_attention_heads"])
-        # self.gguf_writer.add_head_count_kv(self.hparams["num_key_value_heads"] if "num_key_value_heads" in hparams else hparams["num_attention_heads"])
-        # self.gguf_writer.add_layer_norm_rms_eps(self.hparams["rms_norm_eps"])
-        # self.gguf_writer.add_key_length(hparams["head_dim"])
-        # self.gguf_writer.add_value_length(hparams["head_dim"])
-        # self.gguf_writer.add_file_type(self.ftype)
-
-
-        #self.gguf_writer.add_rope_freq_base(self.hparams["rotary_emb_base"])
-     #          self.gguf_writer.add_max_alibi_bias(self.hparams["attn_config"]["alibi_bias_max"])
+        self.gguf_writer.add_name(self.dir_model.name)
+        self.gguf_writer.add_block_count(self.hparams["n_layer"])
+        self.gguf_writer.add_context_length(self.hparams["n_positions"])
+        self.gguf_writer.add_embedding_length(self.hparams["n_embd"])
+        self.gguf_writer.add_feed_forward_length(self.hparams["n_inner"])
+        self.gguf_writer.add_head_count(self.hparams["n_head"])
+        self.gguf_writer.add_layer_norm_eps(self.hparams["layer_norm_epsilon"])
+        self.gguf_writer.add_file_type(self.ftype)
 
     def modify_tensors(self, data_torch: Tensor, name: str, bid: int | None) -> Iterable[tuple[str, Tensor]]:
         del bid  # unused
 
-        # lm_head is not used in llama.cpp, while autoawq will include this tensor in model
-        # To prevent errors, skip loading lm_head.weight.
-        if name == "lm_head.weight":
-            logger.debug(f"Skipping get tensor {name!r} in safetensors so that convert can end normally.")
-            return []
+        tensors: list[tuple[str, Tensor]] = []
 
-        # ref: https://github.com/huggingface/transformers/blob/fc37f38915372c15992b540dfcbbe00a916d4fc6/src/transformers/models/gemma/modeling_gemma.py#L89
-        if name.endswith("norm.weight"):
-            data_torch = data_torch + 1
+        # we don't need these
+        if name.endswith(("attn.bias", "attn.masked_bias", "relative_pe.slopes")):
+            return tensors
 
-        return [(self.map_tensor_name(name), data_torch)]
+        if name.endswith((".c_attn.weight", ".c_proj.weight", ".c_fc.weight", ".c_proj.weight")):
+            data_torch = data_torch.transpose(1, 0)
+
+        # elif name.endswith(("q_proj.weight", "q_proj.bias")):
+        #     data_torch = LlamaModel.permute(data_torch, n_head, n_head)
+        # elif name.endswith(("k_proj.weight", "k_proj.bias")):
+        #     data_torch = LlamaModel.permute(data_torch, n_head, n_kv_head)
+
+        new_name = self.map_tensor_name(name)
+
+        tensors.append((new_name, data_torch))
+
+        # note: GPT2 output is tied to (same as) wte in original model
+        if new_name == self.format_tensor_name(gguf.MODEL_TENSOR.TOKEN_EMBD):
+            tensors.append((self.format_tensor_name(gguf.MODEL_TENSOR.OUTPUT), data_torch))
+
+        return tensors
 
 
 
