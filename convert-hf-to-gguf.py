@@ -2730,32 +2730,32 @@ class JaisModel(Model):
         assert self.hparams["position_embedding_type"] == "alibi"
 
     def set_vocab(self):
-        tokens, toktypes, tokpre = self.get_vocab_base()
-        self.vocab_size = len(tokens)
+        # tokens, toktypes, tokpre = self.get_vocab_base()
+        # self.vocab_size = len(tokens)
 
-        # we need this to validate the size of the token_type embeddings
-        # though currently we are passing all zeros to the token_type embeddings
-        self.gguf_writer.add_token_type_count(2)  # "Sequence A" or "Sequence B"
+        # # we need this to validate the size of the token_type embeddings
+        # # though currently we are passing all zeros to the token_type embeddings
+        # self.gguf_writer.add_token_type_count(2)  # "Sequence A" or "Sequence B"
 
-        # convert to phantom space vocab
-        def phantom(tok):
-            if tok.startswith("[") and tok.endswith("]"):
-                return tok
-            if tok.startswith("##"):
-                return tok[2:]
-            return "\u2581" + tok
-        tokens = list(map(phantom, tokens))
+        # # convert to phantom space vocab
+        # def phantom(tok):
+        #     if tok.startswith("[") and tok.endswith("]"):
+        #         return tok
+        #     if tok.startswith("##"):
+        #         return tok[2:]
+        #     return "\u2581" + tok
+        # tokens = list(map(phantom, tokens))
 
-        # add vocab to gguf
-        self.gguf_writer.add_tokenizer_model("bert")
-        self.gguf_writer.add_tokenizer_pre(tokpre)
-        self.gguf_writer.add_token_list(tokens)
-        self.gguf_writer.add_token_types(toktypes)
+        # # add vocab to gguf
+        # self.gguf_writer.add_tokenizer_model("bert")
+        # self.gguf_writer.add_tokenizer_pre(tokpre)
+        # self.gguf_writer.add_token_list(tokens)
+        # self.gguf_writer.add_token_types(toktypes)
 
-        # handle special tokens
-        special_vocab = gguf.SpecialVocab(self.dir_model, n_vocab=len(tokens))
-        special_vocab.add_to_gguf(self.gguf_writer)
-        #self._set_vocab_gpt2()
+        # # handle special tokens
+        # special_vocab = gguf.SpecialVocab(self.dir_model, n_vocab=len(tokens))
+        # special_vocab.add_to_gguf(self.gguf_writer)
+        self._set_vocab_gpt2()
 
     def set_gguf_parameters(self):
         self.gguf_writer.add_name(self.dir_model.name)
@@ -2789,8 +2789,8 @@ class JaisModel(Model):
         tensors.append((new_name, data_torch))
 
         # note: GPT2 output is tied to (same as) wte in original model
-        if new_name == self.format_tensor_name(gguf.MODEL_TENSOR.TOKEN_EMBD):
-            tensors.append((self.format_tensor_name(gguf.MODEL_TENSOR.OUTPUT), data_torch))
+        # if new_name == self.format_tensor_name(gguf.MODEL_TENSOR.TOKEN_EMBD):
+        #     tensors.append((self.format_tensor_name(gguf.MODEL_TENSOR.OUTPUT), data_torch))
 
         return tensors
 
