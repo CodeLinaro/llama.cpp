@@ -2773,10 +2773,10 @@ class JaisModel(Model):
         tensors: list[tuple[str, Tensor]] = []
 
         # we don't need these
-        if name.endswith(("attn.bias", "attn.masked_bias", "relative_pe.slopes")):
+        if name.endswith((".attn.bias", "relative_pe.slopes")):
             return tensors
 
-        if name.endswith((".c_attn.weight", ".c_proj.weight", ".c_fc.weight", ".c_proj.weight")):
+        if name.endswith((".c_attn.weight", ".c_proj.weight", ".c_fc.weight")):
             data_torch = data_torch.transpose(1, 0)
 
         # elif name.endswith(("q_proj.weight", "q_proj.bias")):
