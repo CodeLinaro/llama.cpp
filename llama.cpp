@@ -1115,7 +1115,6 @@ static const std::map<llm_arch, std::map<llm_tensor, std::string>> LLM_TENSOR_NA
         LLM_ARCH_JAIS,
         {
             { LLM_TENSOR_TOKEN_EMBD,      "token_embd" },
-            { LLM_TENSOR_POS_EMBD,        "position_embd" },
             { LLM_TENSOR_OUTPUT_NORM,     "output_norm" },
             { LLM_TENSOR_OUTPUT,          "output" },
             { LLM_TENSOR_ATTN_NORM,       "blk.%d.attn_norm" },
@@ -4520,6 +4519,7 @@ static void llm_load_hparams(
                 hparams.f_max_alibi_bias = 8.0f;
                 switch (hparams.n_layer) {
                     case 24: model.type = e_model::MODEL_1_3B; break;
+                    case 40: model.type = e_model::MODEL_13B; break;
                     /* FIXME */
                     default: model.type = e_model::MODEL_UNKNOWN;
                 }
@@ -4773,10 +4773,10 @@ static void llm_load_vocab(
 
     for (uint32_t i = 0; i < n_vocab; i++) {
         std::string word = gguf_get_arr_str(ctx, token_idx, i);
-
+        std::cerr << "word: " << word << std::endl;
         if (unicode_cpts_from_utf8(word).size() <= 0) {
             size_t size = unicode_cpts_from_utf8(word).size();
-            std::cerr << "unicode_cpts_from_utf failed for \"" << word << "\"" 
+            std::cerr << "unicode_cpts_from_utf failed for \"" << word << "\""
                 << " size = " << size << " i = " << i << std::endl;
             // FIXME: REVISIT THIS
             //GGML_ASSERT(false);
@@ -6480,10 +6480,9 @@ static bool llm_load_tensors(
 
                         layer.ffn_down   = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_DOWN, "weight", i), {n_ff, n_embd});
                         layer.ffn_down_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_DOWN, "bias", i),   {n_embd});
-                                                
-                        layer.ffn_gate   = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_DOWN, "weight", i), {n_ff, n_embd});
-                        layer.ffn_gate_b = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_DOWN, "bias", i),   {n_embd});
 
+                        layer.ffn_gate     = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_GATE,   "weight", i), {n_embd, n_ff});
+                        layer.ffn_gate_b   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_GATE,   "bias", i),   {n_ff});
                         layer.ffn_up     = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_UP,   "weight", i), {n_embd, n_ff});
                         layer.ffn_up_b   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_UP,   "bias", i),   {n_ff});
                     }
@@ -11572,9 +11571,9 @@ struct llm_build_context {
                 cur = ggml_add(ctx0, cur, model.layers[il].bqkv);
                 cb(cur, "bqkv", il);
 
-                struct ggml_tensor * Qcur = ggml_cont(ctx0, ggml_view_2d(ctx0, cur, n_embd,     n_tokens, cur->nb[1], 0*sizeof(float)*(n_embd)));
-                struct ggml_tensor * Kcur = ggml_cont(ctx0, ggml_view_2d(ctx0, cur, n_embd_gqa, n_tokens, cur->nb[1], 1*sizeof(float)*(n_embd)));
-                struct ggml_tensor * Vcur = ggml_cont(ctx0, ggml_view_2d(ctx0, cur, n_embd_gqa, n_tokens, cur->nb[1], 1*sizeof(float)*(n_embd + n_embd_gqa)));
+                struct ggml_tensor * Qcur = ggml_cont(ctx0, ggml_view_2d(ctx0, cur, n_embd,     n_tokens, cur->nb[1], 0*cur->nb[0]*(n_embd)));
+                struct ggml_tensor * Kcur = ggml_cont(ctx0, ggml_view_2d(ctx0, cur, n_embd_gqa, n_tokens, cur->nb[1], 1*cur->nb[0]*(n_embd)));
+                struct ggml_tensor * Vcur = ggml_cont(ctx0, ggml_view_2d(ctx0, cur, n_embd_gqa, n_tokens, cur->nb[1], 1*cur->nb[0]*(n_embd + n_embd_gqa)));
 
                 cb(Qcur, "Qcur", il);
                 cb(Kcur, "Kcur", il);
@@ -11608,10 +11607,10 @@ struct llm_build_context {
 
                 cur = llm_build_ffn(ctx0, cur,
                         model.layers[il].ffn_up,   model.layers[il].ffn_up_b,
-                        NULL,                      NULL,
+                        model.layers[il].ffn_gate, model.layers[il].ffn_gate_b,
                         model.layers[il].ffn_down, model.layers[il].ffn_down_b,
                         NULL,
-                        LLM_FFN_GELU, LLM_FFN_SEQ, cb, il);
+                        LLM_FFN_SILU, LLM_FFN_PAR, cb, il);
                 cb(cur, "ffn_out", il);
             }
 

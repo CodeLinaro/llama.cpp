@@ -2776,7 +2776,7 @@ class JaisModel(Model):
         if name.endswith((".attn.bias", "relative_pe.slopes")):
             return tensors
 
-        if name.endswith((".c_attn.weight", ".c_proj.weight", ".c_fc.weight")):
+        if name.endswith((".c_attn.weight", ".c_proj.weight", ".c_fc.weight", ".c_fc2.weight")):
             data_torch = data_torch.transpose(1, 0)
 
         # elif name.endswith(("q_proj.weight", "q_proj.bias")):
