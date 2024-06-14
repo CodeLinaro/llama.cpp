@@ -251,7 +251,7 @@ int main(int argc, char ** argv) {
 
     if (params.interactive_first || !params.prompt.empty() || session_tokens.empty()) {
         LOG("tokenize the prompt\n");
-        embd_inp = ::llama_tokenize(ctx, params.prompt, true, true);
+        embd_inp = ::llama_tokenize(ctx, params.prompt, false, true);
     } else {
         LOG("use session tokens\n");
         embd_inp = session_tokens;
@@ -717,7 +717,7 @@ int main(int argc, char ** argv) {
 
                 // Console/Stream Output
                 //fprintf(stdout, "%d, %s\n", id, token_str.c_str());
-                std::cout << id << ", " << token_str << std::endl;
+                std::cout /* << id << ", " */ << token_str;//<< std::endl;
                 // Record Displayed Tokens To Log
                 // Note: Generated tokens are created one by one hence this check
                 if (embd.size() > 1) {

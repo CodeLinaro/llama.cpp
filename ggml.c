@@ -13937,6 +13937,8 @@ static void ggml_compute_forward_soft_max_f32(
         const uint32_t h = (i1/ne01)%ne02; // head
         const float slope = (max_bias > 0.0f) ? h < n_head_log2 ? powf(m0, h + 1) : powf(m1, 2*(h - n_head_log2) + 1) : 1.0f;
 
+        //printf("slope[%d] = %f\n", h, slope);
+
         float * sp = (float *)((char *) src0->data + i1*src0->nb[1]);
         float * dp = (float *)((char *)  dst->data +  i1*dst->nb[1]);
 
@@ -13948,14 +13950,20 @@ static void ggml_compute_forward_soft_max_f32(
         ggml_vec_scale_f32(nc, wp, scale);
         if (mp_f32) {
             if (use_f16) {
+                //printf("use_fp16");
                 for (int i = 0; i < nc; ++i) {
                     wp[i] += slope*GGML_FP16_TO_FP32(mp_f16[i]);
+                    //printf("[%d] mp_fp16[%d] = %3.4f\t->%3.4f\n", h, i, GGML_FP16_TO_FP32(mp_f16[i]), slope*GGML_FP16_TO_FP32(mp_f16[i]));
                 }
             } else {
+                //printf("NOT use_fp16");
                 for (int i = 0; i < nc; ++i) {
                     wp[i] += slope*mp_f32[i];
+                    //printf("[%d] mp_fp32[%d] = %3.4f\t->%3.4f\n", h, i, mp_f32[i], slope*mp_f32[i]);
+
                 }
             }
+            //printf("\n");
         }
 
 #ifndef NDEBUG

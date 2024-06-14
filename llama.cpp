@@ -4773,7 +4773,7 @@ static void llm_load_vocab(
 
     for (uint32_t i = 0; i < n_vocab; i++) {
         std::string word = gguf_get_arr_str(ctx, token_idx, i);
-        std::cerr << "word: " << word << std::endl;
+        //std::cerr << "word: " << word << std::endl;
         if (unicode_cpts_from_utf8(word).size() <= 0) {
             size_t size = unicode_cpts_from_utf8(word).size();
             std::cerr << "unicode_cpts_from_utf failed for \"" << word << "\""
@@ -6750,6 +6750,7 @@ static struct ggml_tensor * llm_build_inp_embd(
         ggml_set_input(lctx.inp_tokens);
 
         inpL = ggml_get_rows(ctx, tok_embd, lctx.inp_tokens);
+        inpL = ggml_scale_inplace(ctx, inpL, 14.6);// 9.1705785388303); //14.6f);// // FIXME (mup_embeddings_scale)
     } else {
        lctx.inp_embd = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_embd, batch.n_tokens);
         inpL = lctx.inp_embd;
@@ -11625,6 +11626,8 @@ struct llm_build_context {
         cb(cur, "result_norm", -1);
 
         cur = ggml_mul_mat(ctx0, model.output, cur);
+        cur = ggml_scale_inplace(ctx0, cur, 0.11100000000000002f); //0.13689793726971125);//   // FIXME (mup_output_alpha * mup_width_scale)
+
         cb(cur, "result_output", -1);
 
         ggml_build_forward_expand(gf, cur);
