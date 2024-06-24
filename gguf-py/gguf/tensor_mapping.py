@@ -270,7 +270,7 @@ class TensorNameMap:
             "model.layers.{bid}.mlp.gate_proj",           # llama-hf refact
             "layers.{bid}.feed_forward.w1",               # llama-pth
             "transformer.h.{bid}.mlp.w2",                 # qwen
-            "transformer.h.{bid}.mlp.c_fc2",               # jais
+            "transformer.h.{bid}.mlp.c_fc2",              # jais
             "model.layers.layers.{bid}.mlp.gate_proj",    # plamo
             "model.layers.{bid}.feed_forward.w1",         # internlm2
             "encoder.layers.{bid}.mlp.fc12",              # nomic-bert
@@ -443,11 +443,8 @@ class TensorNameMap:
             self.block_mappings_cfg.update(self.arch_block_mappings_cfg[arch])
         for bid in range(n_blocks):
             for tensor, keys in self.block_mappings_cfg.items():
-                print(tensor)
                 if tensor not in MODEL_TENSORS[arch]:
-                    print("skipped")
                     continue
-                print("not skipped")
                 # TODO: make this configurable
                 n_experts = 160
                 for xid in range(n_experts):
