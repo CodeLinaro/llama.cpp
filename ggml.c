@@ -13770,6 +13770,8 @@ static void ggml_compute_forward_soft_max_f32(
         const uint32_t h = (i1/ne01)%ne02; // head
         const float slope = (max_bias > 0.0f) ? h < n_head_log2 ? powf(m0, h + 1) : powf(m1, 2*(h - n_head_log2) + 1) : 1.0f;
 
+        //printf("slope[%d] = %f\n", h, slope);
+
         float * sp = (float *)((char *) src0->data + i1*src0->nb[1]);
         float * dp = (float *)((char *)  dst->data +  i1*dst->nb[1]);
 
@@ -13781,14 +13783,20 @@ static void ggml_compute_forward_soft_max_f32(
         ggml_vec_scale_f32(nc, wp, scale);
         if (mp_f32) {
             if (use_f16) {
+                //printf("use_fp16");
                 for (int i = 0; i < nc; ++i) {
                     wp[i] += slope*GGML_FP16_TO_FP32(mp_f16[i]);
+                    //printf("[%d] mp_fp16[%d] = %3.4f\t->%3.4f\n", h, i, GGML_FP16_TO_FP32(mp_f16[i]), slope*GGML_FP16_TO_FP32(mp_f16[i]));
                 }
             } else {
+                //printf("NOT use_fp16");
                 for (int i = 0; i < nc; ++i) {
                     wp[i] += slope*mp_f32[i];
+                    //printf("[%d] mp_fp32[%d] = %3.4f\t->%3.4f\n", h, i, mp_f32[i], slope*mp_f32[i]);
+
                 }
             }
+            //printf("\n");
         }
 
 #ifndef NDEBUG
@@ -16902,6 +16910,41 @@ static void ggml_compute_forward_cross_entropy_loss_back_f32(
     }
 }
 
+static void dump_a_few_floats(struct ggml_tensor * t) {
+    if (t->type != GGML_TYPE_F32) {
+        printf("TENSOR TYPE NO BUENO: %d\n", t->type);
+        return;
+    }
+
+    printf("%s, %s: %ldx%ldx%ldx%ld\n",
+        ggml_op_name(t->op),
+        t->name,
+        t->ne[3],
+        t->ne[2],
+        t->ne[1],
+        t->ne[0]);
+
+    // Assuming packed
+    int32_t end_0  = t->ne[0];
+    int32_t end_1  = t->ne[1] > 5 ? 5 : t->ne[1];
+
+    printf("[");
+    for (int32_t y = 0; y < end_1; y++) {
+        int32_t base = y * end_0;
+        printf("[");
+        for (int32_t i = 0; i < 8; i++) {
+            printf("%3.4f, ", ((float*)t->data)[base + i]);
+        }
+        printf("... ");
+        for (int32_t i = end_0 - 8; i < end_0; i++) {
+            printf("%3.4f, ", ((float*)t->data)[base + i]);
+        }
+        printf("]\n");
+    }
+    printf("]\n\n");
+
+}
+
 static void ggml_compute_forward_cross_entropy_loss_back(
         const struct ggml_compute_params * params,
         struct ggml_tensor * dst) {
@@ -17254,6 +17297,7 @@ static void ggml_compute_forward(struct ggml_compute_params * params, struct ggm
                 GGML_ASSERT(false);
             } break;
     }
+    //dump_a_few_floats(tensor);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
