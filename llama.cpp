@@ -6483,7 +6483,7 @@ static bool llm_load_tensors(
 
                         layer.ffn_gate     = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_GATE,   "weight", i), {n_embd, n_ff});
                         layer.ffn_gate_b   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_GATE,   "bias", i),   {n_ff});
-                        
+
                         layer.ffn_up     = ml.create_tensor(ctx_split, tn(LLM_TENSOR_FFN_UP,   "weight", i), {n_embd, n_ff});
                         layer.ffn_up_b   = ml.create_tensor(ctx_layer, tn(LLM_TENSOR_FFN_UP,   "bias", i),   {n_ff});
                     }
@@ -6751,7 +6751,6 @@ static struct ggml_tensor * llm_build_inp_embd(
         ggml_set_input(lctx.inp_tokens);
 
         inpL = ggml_get_rows(ctx, tok_embd, lctx.inp_tokens);
-        inpL = ggml_scale_inplace(ctx, inpL, 14.6);// 9.1705785388303); //14.6f);// // FIXME (mup_embeddings_scale)
     } else {
        lctx.inp_embd = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_embd, batch.n_tokens);
         inpL = lctx.inp_embd;
@@ -11627,7 +11626,6 @@ struct llm_build_context {
         cb(cur, "result_norm", -1);
 
         cur = ggml_mul_mat(ctx0, model.output, cur);
-        cur = ggml_scale_inplace(ctx0, cur, 0.11100000000000002f); //0.13689793726971125);//   // FIXME (mup_output_alpha * mup_width_scale)
 
         cb(cur, "result_output", -1);
 
