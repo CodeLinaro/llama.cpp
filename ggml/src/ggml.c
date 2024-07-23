@@ -18751,7 +18751,7 @@ static bool __thread_affinity(const bool * mask) {
 
     for (uint32_t i = 0; i < GGML_MAX_N_THREADS; i++) {
         if (mask[i]) {
-            printf("Thread %lx: adding %d to cpuset\n", pthread_self(), i);
+            GGML_PRINT_DEBUG("Thread %lx: adding %d to cpuset\n", pthread_self(), i);
             CPU_SET(i, &cpuset);
         }
     }
