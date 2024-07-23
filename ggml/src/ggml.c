@@ -19144,7 +19144,7 @@ static bool ggml_graph_compute_check_for_work(struct ggml_compute_state * state)
         if (threadpool->poll) {
             while (!threadpool->new_work && !threadpool->stop && !threadpool->pause) {
                 // No new work. Yield and keep polling.
-                //__cpu_relax();
+                __cpu_relax();
             }
         } else {
             ggml_mutex_lock_shared(&threadpool->mutex);
