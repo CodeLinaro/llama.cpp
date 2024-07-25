@@ -18740,6 +18740,7 @@ static bool __thread_priority(int32_t prio) {
 
 #ifndef __USE_GNU
 #define __USE_GNU
+#define _GNU_SOURCE
 #endif
 #include <sched.h>
 
