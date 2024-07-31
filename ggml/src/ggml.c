@@ -118,8 +118,14 @@ static int sched_yield (void) {
     return 0;
 }
 #else
+
+#ifndef __USE_GNU
+#define __USE_GNU
+#endif
+
 #include <pthread.h>
 #include <stdatomic.h>
+#include <sched.h>
 
 typedef void * thread_ret_t;
 
@@ -18799,11 +18805,6 @@ static bool __thread_priority(int32_t prio) {
 }
 
 #else // posix?
-
-#ifndef __USE_GNU
-#define __USE_GNU
-#endif
-#include <sched.h>
 
 static bool __thread_affinity(const bool * mask) {
     cpu_set_t cpuset;
