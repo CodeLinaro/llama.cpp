@@ -43,6 +43,9 @@ class GGMLFType(IntEnum):
     MOSTLY_Q5_K_M        = 17
     MOSTLY_Q6_K          = 18
 
+    MOSTLY_Q4_4          = 32
+    MOSTLY_Q8_4          = 33
+
 
 class Hyperparameters:
     def __init__(self):

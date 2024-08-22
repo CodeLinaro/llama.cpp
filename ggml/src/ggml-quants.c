@@ -1622,6 +1622,178 @@ void dequantize_row_q8_0(const block_q8_0 * restrict x, float * restrict y, int6
     }
 }
 
+// fp32 -> int4 for 32 elements
+// id for inverse-scale
+static void quantize_block_q4_4(const float* restrict x, block_q4_4* restrict yb) {
+    static const int qk = QK4_4;
+
+    float amax = 0.0f; // absolute max
+    float max  = 0.0f;
+
+    for (int i = 0; i < qk; i++) {
+        const float v = x[i];
+        if (amax < fabsf(v)) {
+            amax = fabsf(v);
+            max  = v;
+        }
+    }
+
+    const float d  = max / -8;
+    const float id = d ? 1.0f/d : 0.0f;
+
+    yb->d = GGML_FP32_TO_FP16(d);
+
+    uint8_t* restrict y = yb->qs;
+
+    for (int i = 0; i < qk/2; ++i) {
+        float x0 = x[i] * id;
+        float x1 = x[i + qk/2] * id;
+
+        uint8_t xi0 = MIN(15, (int8_t)(x0 + 8.5f));
+        uint8_t xi1 = MIN(15, (int8_t)(x1 + 8.5f));
+
+        y[i] = (xi0 & 0x0f) | (xi1 << 4);
+    }
+}
+
+// reference implementation for deterministic creation of model files
+void quantize_row_q4_4_ref(const float* restrict x, block_q4_4* restrict y, int64_t k) {
+    static const int qk = QK4_4;
+    assert(k % qk == 0);
+
+    const int nb = k / qk;
+
+    for (int i = 0; i < nb; i++) {
+        quantize_block_q4_4(x + i*qk, y + i);
+    }
+}
+
+void quantize_row_q4_4(const float * restrict x, void * restrict y, int64_t k) {
+    quantize_row_q4_4_ref(x, y, k);
+}
+
+static void dequantize_block_q4_4(const block_q4_4 * restrict x, float * restrict y) {
+    static const int qk = QK4_4;
+    const float d = GGML_FP16_TO_FP32(x->d);
+    const uint8_t* qs = x->qs;
+
+    for (int i = 0; i < qk / 2; ++i) {
+        const int x0 = (qs[i] & 0x0F) - 8;
+        const int x1 = (qs[i] >>   4) - 8;
+        y[i + 0 ]   = x0*d;
+        y[i + qk/2] = x1*d;
+    }
+}
+
+void dequantize_row_q4_4(const block_q4_4 * restrict x, float * restrict y, int64_t k) {
+    static const int qk = QK4_4;
+
+    assert(k % qk == 0);
+
+    const int nb = k / qk;
+
+    for (int i = 0; i < nb; i++) {
+        dequantize_block_q4_4(x + i, y + i*qk);
+    }
+}
+
+// reference implementation for deterministic creation of model files
+void quantize_row_q8_4_ref(const float * restrict x, block_q8_4 * restrict y, int64_t k) {
+    assert(k % QK8_4 == 0);
+    const int nb = k / QK8_4;
+
+    for (int i = 0; i < nb; i++) {
+        float amax = 0.0f; // absolute max
+
+        for (int j = 0; j < QK8_4; j++) {
+            const float v = x[i*QK8_4 + j];
+            amax = MAX(amax, fabsf(v));
+        }
+
+        const float d = amax / ((1 << 7) - 1);
+        const float id = d ? 1.0f/d : 0.0f;
+
+        y[i].d = GGML_FP32_TO_FP16(d);
+
+        for (int j = 0; j < QK8_4; ++j) {
+            const float v = x[i*QK8_4 + j]*id;
+            y[i].qs[j] = roundf(v);
+        }
+    }
+}
+
+void quantize_row_q8_4(const float * restrict x, void * restrict vy, int64_t k) {
+    assert(k % QK8_4 == 0);
+
+    block_q8_4 * restrict y = vy;
+
+#if defined(__ARM_NEON_X)
+    const int nb = k / QK8_4;
+    for (int i = 0; i < nb; i++) {
+        float32x4_t srcv [8];
+        float32x4_t asrcv[8];
+        float32x4_t amaxv[8];
+
+        for (int j = 0; j < 8; j++) srcv[j]  = vld1q_f32(x + i*32 + 4*j);
+        for (int j = 0; j < 8; j++) asrcv[j] = vabsq_f32(srcv[j]);
+
+        for (int j = 0; j < 4; j++) amaxv[2*j] = vmaxq_f32(asrcv[2*j], asrcv[2*j+1]);
+        for (int j = 0; j < 2; j++) amaxv[4*j] = vmaxq_f32(amaxv[4*j], amaxv[4*j+2]);
+        for (int j = 0; j < 1; j++) amaxv[8*j] = vmaxq_f32(amaxv[8*j], amaxv[8*j+4]);
+
+        const float amax = vmaxvq_f32(amaxv[0]);
+
+        const float d = amax / ((1 << 7) - 1);
+        const float id = d ? 1.0f/d : 0.0f;
+
+        y[i].d = GGML_FP32_TO_FP16(d);
+
+        for (int j = 0; j < 8; j++) {
+            const float32x4_t v  = vmulq_n_f32(srcv[j], id);
+            const int32x4_t   vi = vcvtnq_s32_f32(v);
+
+            y[i].qs[4*j + 0] = vgetq_lane_s32(vi, 0);
+            y[i].qs[4*j + 1] = vgetq_lane_s32(vi, 1);
+            y[i].qs[4*j + 2] = vgetq_lane_s32(vi, 2);
+            y[i].qs[4*j + 3] = vgetq_lane_s32(vi, 3);
+        }
+    }
+#else
+    // scalar
+    quantize_row_q8_4_ref(x, y, k);
+#endif
+}
+
+void dequantize_row_q8_4(const block_q8_4 * restrict x, float * restrict y, int64_t k) {
+    static const int qk = QK8_4;
+
+    assert(k % qk == 0);
+
+    const int nb = k / qk;
+
+    for (int i = 0; i < nb; i++) {
+        const float d = GGML_FP16_TO_FP32(x[i].d);
+
+        for (int j = 0; j < qk; ++j) {
+            y[i*qk + j] = x[i].qs[j]*d;
+        }
+    }
+}
+
+size_t quantize_q4_4(const float * restrict src, void * restrict dst, int64_t nrow, int64_t n_per_row, const float * quant_weights) {
+    (void)quant_weights; // not used
+    const size_t row_size = ggml_row_size(GGML_TYPE_Q4_4, n_per_row);
+    quantize_row_q4_4_ref(src, dst, (int64_t)nrow*n_per_row);
+    return nrow * row_size;
+}
+
+size_t quantize_q8_4(const float * restrict src, void * restrict dst, int64_t nrow, int64_t n_per_row, const float * quant_weights) {
+    (void)quant_weights; // not used
+    const size_t row_size = ggml_row_size(GGML_TYPE_Q8_4, n_per_row);
+    quantize_row_q8_4_ref(src, dst, (int64_t)nrow*n_per_row);
+    return nrow * row_size;
+}
+
 //
 // 2-6 bit quantization in super-blocks
 //
@@ -4206,6 +4378,183 @@ void ggml_vec_dot_q4_0_q8_0(int n, float * restrict s, size_t bs, const void * r
     }
 
     *s = sumf;
+}
+
+#if defined(__ARM_NEON)
+
+typedef union {
+    int8x16x4_t h[2];
+    int8x16_t val[8];
+} int8x16x8_t;
+
+// load 128 int4 vals into int8x16x8 vectors with 4-bit -> 8-bit unpacking
+static inline int8x16x8_t __load128_q4(const uint8_t * __restrict p)
+{
+    uint8x16x4_t u = vld1q_u8_x4(p);
+
+    int8x16x8_t v;
+
+    const uint8x16_t m = vdupq_n_u8(0x0F); // mask
+
+    // first 64 vals
+    v.h[0].val[0] = vreinterpretq_s8_u8(vandq_u8(  u.val[0], m));
+    v.h[0].val[1] = vreinterpretq_s8_u8(vandq_u8(  u.val[1], m));
+    v.h[0].val[2] = vreinterpretq_s8_u8(vandq_u8(  u.val[2], m));
+    v.h[0].val[3] = vreinterpretq_s8_u8(vandq_u8(  u.val[3], m));
+
+    // last 64 vals
+    v.h[1].val[0] = vreinterpretq_s8_u8(vshrq_n_u8(u.val[0], 4));
+    v.h[1].val[1] = vreinterpretq_s8_u8(vshrq_n_u8(u.val[1], 4));
+    v.h[1].val[2] = vreinterpretq_s8_u8(vshrq_n_u8(u.val[2], 4));
+    v.h[1].val[3] = vreinterpretq_s8_u8(vshrq_n_u8(u.val[3], 4));
+
+    const int8x16_t s8b = vdupq_n_s8(8);
+
+#pragma clang loop unroll_count(8)
+    for (unsigned int i=0; i<8; i++) v.val[i] = vsubq_s8(v.val[i], s8b);
+
+    return v;
+}
+
+// load 128 int8 vals into int8x16x8 vectors
+static inline int8x16x8_t __load128_s8(const int8_t * __restrict p)
+{
+    int8x16x8_t v;
+    v.h[0] = vld1q_s8_x4(p);
+    v.h[1] = vld1q_s8_x4(p + 64);
+    return v;
+}
+
+#endif
+
+void ggml_vec_dot_q4_4_q8_4(int n, float * restrict s, size_t _bs, const void * restrict vx, size_t _bx, const void * restrict vy, size_t _by, int _nrc) {
+    const int qk = QK4_4;
+    const int nb = n / qk;
+
+    assert(n % qk == 0);
+
+#if defined(__ARM_FEATURE_MATMUL_INT8)
+    assert(nrc == 1); // TODO nrc == 2
+#else
+    assert(nrc == 1);
+#endif
+
+    UNUSED(_bs);
+    UNUSED(_bx);
+    UNUSED(_by);
+    UNUSED(_nrc);
+
+    const block_q4_4 * restrict bx = vx;
+    const block_q8_4 * restrict by = vy;
+
+#if defined(__ARM_NEON)
+    float sum = 0;
+    #pragma clang loop unroll_count(4)
+    for (int i = 0; i < nb; i++) {
+        const uint8_t * __restrict x_qs = bx[i].qs;
+        const int8_t  * __restrict y_qs = by[i].qs;
+        const float d = GGML_FP16_TO_FP32(bx[i].d)  * GGML_FP16_TO_FP32(by[i].d);
+
+        int32x4_t p = vdupq_n_s32(0);
+
+        #pragma unroll
+        for (int j = 0; j < qk / 128; j++) {
+            int8x16x8_t x = __load128_q4(x_qs); x_qs += 64;
+            int8x16x8_t y = __load128_s8(y_qs); y_qs += 128;
+
+            #pragma clang loop unroll_count(8)
+            for (unsigned int k=0; k<8; k++) {
+                p = vdotq_s32(p, x.val[k], y.val[k]);
+            }
+        }
+        sum += vaddvq_s32(p) * d;
+    }
+    *s = sum;
+#else
+    // scalar
+    float sumf = 0.0;
+
+    for (int i = 0; i < nb; i++) {
+        const float d = GGML_FP16_TO_FP32(bx[i].d) * GGML_FP16_TO_FP32(by[i].d);
+
+        int sumi = 0;
+
+        #pragma clang loop unroll_count(4) vectorize(enable)
+        for (int k = 0; k < qk/2; ++k) {
+            const int v0 = (bx[i].qs[k] & 0x0F) - 8;
+            const int v1 = (bx[i].qs[k] >>   4) - 8;
+
+            sumi += (v0 * by[i].qs[k]) + (v1 * by[i].qs[k + qk/2]);
+        }
+
+        sumf += d * sumi;
+    }
+
+    *s = sumf;
+#endif  // __ARM_NEON
+}
+
+void ggml_vec_dot_q8_4_q8_4(int n, float * restrict s, size_t _bs, const void * restrict vx, size_t _bx, const void * restrict vy, size_t _by, int _nrc) {
+    const int qk = QK8_4;
+    const int nb = n / qk;
+
+    assert(n % qk == 0);
+
+#if defined(__ARM_FEATURE_MATMUL_INT8)
+    assert((nrc == 2) || (nrc == 1));
+#else
+    assert(nrc == 1);
+#endif
+
+    UNUSED(_nrc);
+    UNUSED(_bx);
+    UNUSED(_by);
+    UNUSED(_bs);
+
+    const block_q8_4 * restrict bx = vx;
+    const block_q8_4 * restrict by = vy;
+
+#if defined(__ARM_NEON)
+    float sum = 0;
+
+    #pragma clang loop unroll_count(4)
+    for (int i = 0; i < nb; i++) {
+        const int8_t  * __restrict x_qs = bx[i].qs;
+        const int8_t  * __restrict y_qs = by[i].qs;
+
+        const float d = GGML_FP16_TO_FP32(bx[i].d) * GGML_FP16_TO_FP32(by[i].d);
+
+        int32x4_t p = vdupq_n_s32(0);
+
+        #pragma unroll
+        for (int j = 0; j < qk / 128; j++) {
+            int8x16x8_t x = __load128_s8(x_qs); x_qs += 128;
+            int8x16x8_t y = __load128_s8(y_qs); y_qs += 128;
+
+            #pragma clang loop unroll_count(8)
+            for (unsigned int ii=0; ii<8; ii++) p = vdotq_s32(p, x.val[ii], y.val[ii]);
+        }
+
+        sum += vaddvq_s32(p) * d;
+    }
+
+    *s = sum;
+#else
+    // scalar
+    float sumf = 0.0;
+
+    for (int i = 0; i < nb; i++) {
+        int sumi = 0;
+
+        for (int j = 0; j < qk; j++) {
+            sumi += bx[i].qs[j] * by[i].qs[j];
+        }
+
+        sumf += sumi*(GGML_FP16_TO_FP32(bx[i].d)*GGML_FP16_TO_FP32(by[i].d));
+    }
+
+    *s = sumf;
+#endif  // __ARM_NEON
 }
 
 void ggml_vec_dot_q4_1_q8_1(int n, float * restrict s, size_t bs, const void * restrict vx, size_t bx, const void * restrict vy, size_t by, int nrc) {
@@ -14854,7 +15203,14 @@ bool ggml_validate_row_data(enum ggml_type type, const void * data, size_t nbyte
             {
                 VALIDATE_ROW_DATA_DVEC_F16_IMPL(block_q4_0x8, data, nbytes / sizeof(block_q4_0x8), 8);
             } break;
-
+        case GGML_TYPE_Q4_4:
+            {
+                VALIDATE_ROW_DATA_D_F16_IMPL(block_q4_4, data, nb);
+            } break;
+        case GGML_TYPE_Q8_4:
+            {
+                VALIDATE_ROW_DATA_D_F16_IMPL(block_q8_4, data, nb);
+            } break;
         case GGML_TYPE_I8:
         case GGML_TYPE_I16:
         case GGML_TYPE_I32:
