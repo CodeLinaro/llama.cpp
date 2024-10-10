@@ -59,8 +59,13 @@ typedef sycl::half2 ggml_half2;
 #ifndef __cplusplus
 #ifndef static_assert
 #if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201100L)
-#define static_assert(cond, msg) _Static_assert(cond, msg)
-#else
+    #if defined(_MSC_VER)
+        // MS defines static_assert in assert.h (see -Wmicrosoft-static-assert)
+        #include <assert.h>
+    #else // Not msft
+        #define stlatic_assert(cond, msg) _Static_assert(cond, msg)
+    #endif
+#else // Older C
 #define static_assert(cond, msg) struct global_scope_noop_trick
 #endif
 #endif

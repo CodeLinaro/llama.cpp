@@ -468,7 +468,7 @@ inline static void * ggml_calloc(size_t num, size_t size) {
 #endif
 
 // floating point type used to accumulate sums
-typedef double ggml_float;
+typedef float ggml_float;
 
 #undef MIN
 #undef MAX
@@ -13937,7 +13937,7 @@ static void ggml_compute_forward_soft_max_f32(
         ggml_float sum = ggml_vec_soft_max_f32(nc, dp, wp, max);
         assert(sum > 0.0);
 
-        sum = 1.0/sum;
+        sum = 1.f/sum;
         ggml_vec_scale_f32(nc, dp, sum);
 
 #ifndef NDEBUG
@@ -16020,7 +16020,7 @@ static void ggml_compute_forward_flash_attn_back_f32(
 
                     assert(sum > 0.0);
 
-                    sum = 1.0/sum;
+                    sum = 1.f/sum;
                     ggml_vec_scale_f32(masked_begin, SM, sum);
 
                 }
@@ -17091,7 +17091,7 @@ static void ggml_compute_forward_cross_entropy_loss_back_f32(
         ggml_vec_max_f32(nc, &max, s0);
         ggml_float sum = ggml_vec_soft_max_f32(nc, ds0, s0, max);
         assert(sum > 0.0);
-        ggml_vec_scale_f32(nc, ds0, 1.0/sum);
+        ggml_vec_scale_f32(nc, ds0, 1.f/sum);
 
         // grad(src0) = (softmax(src0) - src1) * grad(cross_entropy_loss(src0, src1)) / nr
         ggml_vec_sub_f32(nc, ds0, ds0, s1);
@@ -19414,7 +19414,7 @@ static thread_ret_t ggml_graph_compute_secondary_thread(void* data);
 #include "windows.h"
 
 // TODO: support > 64 CPUs
-bool ggml_thread_apply_affinity(bool * mask) {
+static bool ggml_thread_apply_affinity(bool * mask) {
     HANDLE    h = GetCurrentThread();
     uint64_t  bitmask = 0ULL;
 
@@ -21081,13 +21081,13 @@ static enum ggml_opt_result ggml_opt_adam(
             float gnorm = 1.0f;
             if (gclip > 0.0f) {
                 // gradient clipping
-                ggml_float sum = 0.0;
+                double sum = 0.0;
                 for (int64_t i = 0; i < nx; ++i) {
-                    sum += (ggml_float)(g[i]*g[i]);
+                    sum += (double)(g[i]*g[i]);
                 }
-                ggml_float norm = sqrt(sum);
-                if (norm > (ggml_float) gclip) {
-                    gnorm = (float) ((ggml_float) gclip / norm);
+                ggml_float norm = (ggml_float) sqrt(sum);
+                if (norm > gclip) {
+                    gnorm = (float) (gclip / norm);
                 }
             }
             const float beta1h = alpha*sched/(1.0f - powf(beta1, opt->iter));
