@@ -139,7 +139,7 @@ static inline ggml_bf16_t ggml_compute_fp32_to_bf16(float s) {
 
 #ifdef _MSC_VER
 
-typedef uint16_t ggml_fp16_internal_t;
+typedef float16_t ggml_fp16_internal_t;
 
 #define ggml_vld1q_u32(w,x,y,z) { ((w) + ((uint64_t)(x) << 32)), ((y) + ((uint64_t)(z) << 32)) }
 
