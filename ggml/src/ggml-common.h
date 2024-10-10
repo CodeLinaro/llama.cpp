@@ -63,7 +63,7 @@ typedef sycl::half2 ggml_half2;
         // MS defines static_assert in assert.h (see -Wmicrosoft-static-assert)
         #include <assert.h>
     #else // Not msft
-        #define stlatic_assert(cond, msg) _Static_assert(cond, msg)
+        #define static_assert(cond, msg) _Static_assert(cond, msg)
     #endif
 #else // Older C
 #define static_assert(cond, msg) struct global_scope_noop_trick
