@@ -77,6 +77,252 @@ typedef struct {
     int8_t  scales[QK_K/16]; // scales, quantized with 8 bits
     half d;             // super-block scale
 } block_q6_K;
+inline float block_q_4_0_dot_y_flat_noshuffle(
+        global uchar * x,
+        global half  * dh,
+        float sumy,
+        float16 yl,
+        global float *y,
+        int il
+) {
+    float           d   = *dh;
+    global ushort * qs  = ((global ushort *)x + il/4);
+    float           acc = 0.f;
+
+    acc += yl.s0 * (qs[0] & 0x000F);
+    acc += yl.s1 * (qs[0] & 0x00F0);
+    acc += yl.s2 * (qs[0] & 0x0F00);
+    acc += yl.s3 * (qs[0] & 0xF000);
+
+    acc += yl.s4 * (qs[1] & 0x000F);
+    acc += yl.s5 * (qs[1] & 0x00F0);
+    acc += yl.s6 * (qs[1] & 0x0F00);
+    acc += yl.s7 * (qs[1] & 0xF000);
+
+    acc += yl.s8 * (qs[2] & 0x000F);
+    acc += yl.s9 * (qs[2] & 0x00F0);
+    acc += yl.sa * (qs[2] & 0x0F00);
+    acc += yl.sb * (qs[2] & 0xF000);
+
+    acc += yl.sc * (qs[3] & 0x000F);
+    acc += yl.sd * (qs[3] & 0x00F0);
+    acc += yl.se * (qs[3] & 0x0F00);
+    acc += yl.sf * (qs[3] & 0xF000);
+
+    /*acc += y[ 0] * ((qs[0] & 0x000F) >> 0);
+    acc += y[ 1] * ((qs[0] & 0x00F0) >> 4);
+    acc += y[ 2] * ((qs[0] & 0x0F00) >> 8);
+    acc += y[ 3] * ((qs[0] & 0xF000) >> 12);
+
+    acc += y[ 4] * ((qs[1] & 0x000F) >> 0);
+    acc += y[ 5] * ((qs[1] & 0x00F0) >> 4);
+    acc += y[ 6] * ((qs[1] & 0x0F00) >> 8);
+    acc += y[ 7] * ((qs[1] & 0xF000) >> 12);
+
+    acc += y[ 8] * ((qs[2] & 0x000F) >> 0);
+    acc += y[ 9] * ((qs[2] & 0x00F0) >> 4);
+    acc += y[10] * ((qs[2] & 0x0F00) >> 8);
+    acc += y[11] * ((qs[2] & 0xF000) >> 12);
+
+    acc += y[12] * ((qs[3] & 0x000F) >> 0);
+    acc += y[13] * ((qs[3] & 0x00F0) >> 4);
+    acc += y[14] * ((qs[3] & 0x0F00) >> 8);
+    acc += y[15] * ((qs[3] & 0xF000) >> 12);*/
+
+    return d * (-8.f*sumy + acc);
+}
+
+#undef N_DST
+#undef N_SIMDGROUP
+#undef N_SIMDWIDTH
+
+#ifdef INTEL_GPU
+#define N_DST 8 // each SIMD group works on 4 rows
+#define N_SIMDGROUP 1 // number of SIMD groups in a thread group
+#define N_SIMDWIDTH 16 // assuming SIMD group size is 32
+#elif defined (ADRENO_GPU)
+#define N_DST 8
+#define N_SIMDGROUP 1
+#define N_SIMDWIDTH 64
+#endif
+
+inline void mul_vec_q_n_f32_flat_noshuffle(
+        global uchar * src0_q,
+        global half  * src0_d,
+        global float * src1,
+        global float * dst,
+        int ne00,
+        int ne01,
+        int ne02,
+        int ne10,
+        int ne12,
+        int ne0,
+        int ne1,
+        int r2,
+        int r3
+) {
+    const int nb = ne00/QK4_0;
+
+    int r0 = get_group_id(0);
+    int r1 = get_group_id(1);
+    int im = get_group_id(2);
+
+    // (r0 * N_SIMDGROUP + get_sub_group_id()) is the linear global id of
+    // a SIMD group in the grid. Each SIMD group produces N_DST values in the
+    // result, hence uses nb blocks, i.e., the offset becomes first_row*nb.
+    // Currently with llama2 7B, im is always 0.
+    // TODO: how to handle im/gqa*(nb*ne0)?
+    int first_row = (r0 * N_SIMDGROUP + get_sub_group_id()) * N_DST;
+
+    int i12 = im%ne12;
+    int i13 = im/ne12;
+
+    // The number of scales is the same as the number of blocks.
+    int offset0_d = first_row * nb + (i12/r2)*(nb*ne01) + (i13/r3)*(nb*ne01*ne02);
+    // Each block contains QK4_0/2 uchars, hence offset for qs is as follows.
+    int offset0_q = (first_row * nb + (i12/r2)*(nb*ne01) + (i13/r3)*(nb*ne01*ne02)) * QK4_0/2;
+
+    global uchar * x = (global uchar *) src0_q + offset0_q;
+    global half  * d = (global half  *) src0_d + offset0_d;
+    global float * y = (global float *) src1   + r1*ne10 + im*ne00*ne1;
+
+    float16 yl;
+    float8 sumf = 0.f;
+
+    int ix = get_sub_group_local_id()/2;
+    int il = 16*(get_sub_group_local_id()%2);
+
+    global float * yb = y + ix*QK4_0 + il;
+
+    for (int ib = ix; ib < nb; ib += N_SIMDWIDTH/2) {
+        float sumy = 0.f;
+
+        yl = *(global float16*)(yb + 0);
+
+        sumy += yl.s0;
+        sumy += yl.s1;
+        sumy += yl.s2;
+        sumy += yl.s3;
+        sumy += yl.s4;
+        sumy += yl.s5;
+        sumy += yl.s6;
+        sumy += yl.s7;
+
+        sumy += yl.s8;
+        sumy += yl.s9;
+        sumy += yl.sa;
+        sumy += yl.sb;
+        sumy += yl.sc;
+        sumy += yl.sd;
+        sumy += yl.se;
+        sumy += yl.sf;
+
+        yl.s1 /= 16.f;
+        yl.s2 /= 256.f;
+        yl.s3 /= 4096.f;
+
+        yl.s5 /= 16.f;
+        yl.s6 /= 256.f;
+        yl.s7 /= 4096.f;
+
+        yl.s9 /= 16.f;
+        yl.sa /= 256.f;
+        yl.sb /= 4096.f;
+
+        yl.sd /= 16.f;
+        yl.se /= 256.f;
+        yl.sf /= 4096.f;
+
+        sumf.s0 += block_q_4_0_dot_y_flat_noshuffle(x + ib*QK4_0/2 + 0*nb*QK4_0/2, d + ib + 0*nb, sumy, yl, yb, il);
+        sumf.s1 += block_q_4_0_dot_y_flat_noshuffle(x + ib*QK4_0/2 + 1*nb*QK4_0/2, d + ib + 1*nb, sumy, yl, yb, il);
+        sumf.s2 += block_q_4_0_dot_y_flat_noshuffle(x + ib*QK4_0/2 + 2*nb*QK4_0/2, d + ib + 2*nb, sumy, yl, yb, il);
+        sumf.s3 += block_q_4_0_dot_y_flat_noshuffle(x + ib*QK4_0/2 + 3*nb*QK4_0/2, d + ib + 3*nb, sumy, yl, yb, il);
+
+        sumf.s4 += block_q_4_0_dot_y_flat_noshuffle(x + ib*QK4_0/2 + 4*nb*QK4_0/2, d + ib + 4*nb, sumy, yl, yb, il);
+        sumf.s5 += block_q_4_0_dot_y_flat_noshuffle(x + ib*QK4_0/2 + 5*nb*QK4_0/2, d + ib + 5*nb, sumy, yl, yb, il);
+        sumf.s6 += block_q_4_0_dot_y_flat_noshuffle(x + ib*QK4_0/2 + 6*nb*QK4_0/2, d + ib + 6*nb, sumy, yl, yb, il);
+        sumf.s7 += block_q_4_0_dot_y_flat_noshuffle(x + ib*QK4_0/2 + 7*nb*QK4_0/2, d + ib + 7*nb, sumy, yl, yb, il);
+
+        //if (get_global_size(1) == 1 && get_group_id(0) == 0 && get_sub_group_local_id() == 1 && ib == 0) {
+        //    printf("%f, %f, %f, %f, %f, %f, %f, %f,\n%f, %f, %f, %f, %f, %f, %f, %f\n",
+        //        yb[0], yb[1], yb[2], yb[3], yb[4], yb[5], yb[6], yb[7],
+        //        yb[16], yb[17], yb[18], yb[19], yb[20], yb[21], yb[22], yb[23]);
+        //}
+
+        yb += QK4_0 * (N_SIMDWIDTH/2);
+    }
+
+    //if (get_global_size(1) == 1 && get_group_id(0) == 0) {
+    //    printf("%f, %f, %f, %f\n", sumf.s0, sumf.s1, sumf.s2, sumf.s3);
+    //}
+
+    float8 tot = (float8)(
+        sub_group_reduce_add(sumf.s0), sub_group_reduce_add(sumf.s1),
+        sub_group_reduce_add(sumf.s2), sub_group_reduce_add(sumf.s3),
+        sub_group_reduce_add(sumf.s4), sub_group_reduce_add(sumf.s5),
+        sub_group_reduce_add(sumf.s6), sub_group_reduce_add(sumf.s7)
+    );
+    //if (get_global_size(1) == 1 && get_group_id(0) == 0 && get_sub_group_local_id() == 0) {
+    //    printf("%f, %f, %f, %f\n", tot.s0, tot.s1, tot.s2, tot.s3);
+    //}
+
+    if (get_sub_group_local_id() == 0) {
+        if (first_row + 0 < ne01) {
+            dst[r1*ne0 + im*ne0*ne1 + first_row + 0] = tot.s0;
+        }
+        if (first_row + 1 < ne01) {
+            dst[r1*ne0 + im*ne0*ne1 + first_row + 1] = tot.s1;
+        }
+        if (first_row + 2 < ne01) {
+            dst[r1*ne0 + im*ne0*ne1 + first_row + 2] = tot.s2;
+        }
+        if (first_row + 3 < ne01) {
+            dst[r1*ne0 + im*ne0*ne1 + first_row + 3] = tot.s3;
+        }
+
+        if (first_row + 4 < ne01) {
+            dst[r1*ne0 + im*ne0*ne1 + first_row + 4] = tot.s4;
+        }
+        if (first_row + 5 < ne01) {
+            dst[r1*ne0 + im*ne0*ne1 + first_row + 5] = tot.s5;
+        }
+        if (first_row + 6 < ne01) {
+            dst[r1*ne0 + im*ne0*ne1 + first_row + 6] = tot.s6;
+        }
+        if (first_row + 7 < ne01) {
+            dst[r1*ne0 + im*ne0*ne1 + first_row + 7] = tot.s7;
+        }
+    }
+}
+
+#ifdef INTEL_GPU
+REQD_SUBGROUP_SIZE_16
+#elif defined (ADRENO_GPU)
+REQD_SUBGROUP_SIZE_64
+#endif
+kernel void kernel_mul_mat_q4_0_f32_flat_noshuffle(
+        global uchar * src0_q,
+        global half  * src0_d,
+        global float * src1,
+        int offset1,
+        global float * dst,
+        int offsetd,
+        int ne00,
+        int ne01,
+        int ne02,
+        int ne10,
+        int ne12,
+        int ne0,
+        int ne1,
+        int r2,
+        int r3
+) {
+    src1 = (global float*)((global char*)src1 + offset1);
+    dst = (global float*)((global char*)dst + offsetd);
+    //printf("subgroup size: %d\n", get_max_sub_group_size());
+
+    mul_vec_q_n_f32_flat_noshuffle(src0_q, src0_d, src1, dst, ne00, ne01, ne02, ne10, ne12, ne0, ne1, r2, r3);
+}
 
 //------------------------------------------------------------------------------
 // These are the variant for matmatmul, based on the matvecmul kernel with
