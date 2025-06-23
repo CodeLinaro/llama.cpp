@@ -1,5 +1,6 @@
 include(CheckCXXCompilerFlag)
 include("../cmake/common.cmake")
+include(ExternalProject)
 
 add_compile_definitions(GGML_SCHED_MAX_COPIES=${GGML_SCHED_MAX_COPIES})
 
@@ -390,6 +391,7 @@ ggml_add_backend(Vulkan)
 ggml_add_backend(WebGPU)
 ggml_add_backend(zDNN)
 ggml_add_backend(OpenCL)
+ggml_add_backend(Hexagon)
 
 foreach (target ggml-base ggml)
     target_include_directories(${target} PUBLIC    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../include> $<INSTALL_INTERFACE:include>)
