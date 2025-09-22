@@ -7024,25 +7024,6 @@ static void ggml_cl_mul_mat(ggml_backend_t backend, const ggml_tensor * src0, co
     if (src1t == GGML_TYPE_F32 &&
         ne00 % 16 == 0 &&
         ne11 > 1) {
-        cl_mem mem_src0 = extra0->data_device;
-        cl_mem mem_src1 = extra1->data_device;
-
-        if (!ggml_is_contiguous(src0)) {
-            backend_ctx->prealloc_src0.allocate(backend_ctx->context, ggml_nbytes(src0));
-            ggml_cl_copy_to_contiguous(backend, src0, backend_ctx->prealloc_src0.buffer,
-                nb00, nb01, nb02, nb03);
-            mem_src0 = backend_ctx->prealloc_src0.buffer;
-            offset0 = 0;
-        }
-
-        if (!ggml_is_contiguous(src1)) {
-            backend_ctx->prealloc_src1.allocate(backend_ctx->context, ggml_nbytes(src1));
-            ggml_cl_copy_to_contiguous(backend, src1, backend_ctx->prealloc_src1.buffer,
-                    nb10, nb11, nb12, nb13);
-            mem_src1 = backend_ctx->prealloc_src1.buffer;
-            offset1 = 0;
-        }
-
         switch(src0t) {
             case GGML_TYPE_F32: {
                 kernel = backend_ctx->kernel_mul_mm_f32_f32_l4_lm;
@@ -7051,6 +7032,25 @@ static void ggml_cl_mul_mat(ggml_backend_t backend, const ggml_tensor * src0, co
                 int batch_stride_a = ne00*ne01;
                 int batch_stride_b = ne10*ne11;
                 int batch_stride_d = ne0*ne1;
+
+                cl_mem mem_src0 = extra0->data_device;
+                cl_mem mem_src1 = extra1->data_device;
+
+                if (!ggml_is_contiguous(src0)) {
+                    backend_ctx->prealloc_src0.allocate(backend_ctx->context, ggml_nbytes(src0));
+                    ggml_cl_copy_to_contiguous(backend, src0, backend_ctx->prealloc_src0.buffer,
+                        nb00, nb01, nb02, nb03);
+                    mem_src0 = backend_ctx->prealloc_src0.buffer;
+                    offset0 = 0;
+                }
+
+                if (!ggml_is_contiguous(src1)) {
+                    backend_ctx->prealloc_src1.allocate(backend_ctx->context, ggml_nbytes(src1));
+                    ggml_cl_copy_to_contiguous(backend, src1, backend_ctx->prealloc_src1.buffer,
+                            nb10, nb11, nb12, nb13);
+                    mem_src1 = backend_ctx->prealloc_src1.buffer;
+                    offset1 = 0;
+                }
 
                 CL_CHECK(clSetKernelArg(kernel,  0, sizeof(cl_mem),   &mem_src0));
                 CL_CHECK(clSetKernelArg(kernel,  1, sizeof(cl_ulong), &offset0));
@@ -7086,6 +7086,25 @@ static void ggml_cl_mul_mat(ggml_backend_t backend, const ggml_tensor * src0, co
                 int batch_stride_a = ne00*ne01;
                 int batch_stride_b = ne10*ne11;
                 int batch_stride_d = ne0*ne1;
+
+                cl_mem mem_src0 = extra0->data_device;
+                cl_mem mem_src1 = extra1->data_device;
+
+                if (!ggml_is_contiguous(src0)) {
+                    backend_ctx->prealloc_src0.allocate(backend_ctx->context, ggml_nbytes(src0));
+                    ggml_cl_copy_to_contiguous(backend, src0, backend_ctx->prealloc_src0.buffer,
+                        nb00, nb01, nb02, nb03);
+                    mem_src0 = backend_ctx->prealloc_src0.buffer;
+                    offset0 = 0;
+                }
+
+                if (!ggml_is_contiguous(src1)) {
+                    backend_ctx->prealloc_src1.allocate(backend_ctx->context, ggml_nbytes(src1));
+                    ggml_cl_copy_to_contiguous(backend, src1, backend_ctx->prealloc_src1.buffer,
+                            nb10, nb11, nb12, nb13);
+                    mem_src1 = backend_ctx->prealloc_src1.buffer;
+                    offset1 = 0;
+                }
 
                 CL_CHECK(clSetKernelArg(kernel,  0, sizeof(cl_mem),   &mem_src0));
                 CL_CHECK(clSetKernelArg(kernel,  1, sizeof(cl_ulong), &offset0));
@@ -7150,6 +7169,10 @@ static void ggml_cl_mul_mat(ggml_backend_t backend, const ggml_tensor * src0, co
                 return;
             }
             case GGML_TYPE_Q8_0: {
+                if (!ggml_is_contiguous(src0) || !ggml_is_contiguous(src1)) {
+                    break;
+                }
+
                 kernel = backend_ctx->kernel_mul_mm_q8_0_f32_l4_lm;
                 nth0 = 128; // calculated as (BM*BN)/(TM*TN)
 
