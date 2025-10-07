@@ -78,32 +78,50 @@ kernel void kernel_mul_mm_q4_0_f32_l4_lm(
 
     for (int block = 0; block < ne00; block += BK) {
         for (int l = 0; l < BM; l += loadstride_a) {
-            int idx = pos_a + (loadc_a + l) * stride_a / LOAD_VEC_A + loadr_a;
-            int ib  = idx / 4;
-            int iqs = idx % 4;
+            if (loadc_a + l < ne01) {
+                int idx = pos_a + (loadc_a + l) * stride_a / LOAD_VEC_A + loadr_a;
+                int ib  = idx / 4;
+                int iqs = idx % 4;
 
-            float d = (float)src0_d[ib];
-            global uchar4 * qs = src0_q + ib*4 + iqs;
-            uchar4 q = *qs;
-            float4 v1 = (convert_float4((uchar4)((q.s0   )&0x0F, (q.s1   )&0x0F, (q.s2   )&0x0F, (q.s3   )&0x0F)) - 8.0f)*d;
-            float4 v2 = (convert_float4((uchar4)((q.s0>>4)&0x0F, (q.s1>>4)&0x0F, (q.s2>>4)&0x0F, (q.s3>>4)&0x0F)) - 8.0f)*d;
+                float d = (float)src0_d[ib];
+                global uchar4 * qs = src0_q + ib*4 + iqs;
+                uchar4 q = *qs;
+                float4 v1 = (convert_float4((uchar4)((q.s0   )&0x0F, (q.s1   )&0x0F, (q.s2   )&0x0F, (q.s3   )&0x0F)) - 8.0f)*d;
+                float4 v2 = (convert_float4((uchar4)((q.s0>>4)&0x0F, (q.s1>>4)&0x0F, (q.s2>>4)&0x0F, (q.s3>>4)&0x0F)) - 8.0f)*d;
 
-            buf_a[(loadr_a * 4 +  0) * BM + loadc_a + l] = v1.s0;
-            buf_a[(loadr_a * 4 +  1) * BM + loadc_a + l] = v1.s1;
-            buf_a[(loadr_a * 4 +  2) * BM + loadc_a + l] = v1.s2;
-            buf_a[(loadr_a * 4 +  3) * BM + loadc_a + l] = v1.s3;
-            buf_a[(loadr_a * 4 + 16) * BM + loadc_a + l] = v2.s0;
-            buf_a[(loadr_a * 4 + 17) * BM + loadc_a + l] = v2.s1;
-            buf_a[(loadr_a * 4 + 18) * BM + loadc_a + l] = v2.s2;
-            buf_a[(loadr_a * 4 + 19) * BM + loadc_a + l] = v2.s3;
+                buf_a[(loadr_a * 4 +  0) * BM + loadc_a + l] = v1.s0;
+                buf_a[(loadr_a * 4 +  1) * BM + loadc_a + l] = v1.s1;
+                buf_a[(loadr_a * 4 +  2) * BM + loadc_a + l] = v1.s2;
+                buf_a[(loadr_a * 4 +  3) * BM + loadc_a + l] = v1.s3;
+                buf_a[(loadr_a * 4 + 16) * BM + loadc_a + l] = v2.s0;
+                buf_a[(loadr_a * 4 + 17) * BM + loadc_a + l] = v2.s1;
+                buf_a[(loadr_a * 4 + 18) * BM + loadc_a + l] = v2.s2;
+                buf_a[(loadr_a * 4 + 19) * BM + loadc_a + l] = v2.s3;
+            } else {
+                buf_a[(loadr_a * 4 +  0) * BM + loadc_a + l] = 0.0f;
+                buf_a[(loadr_a * 4 +  1) * BM + loadc_a + l] = 0.0f;
+                buf_a[(loadr_a * 4 +  2) * BM + loadc_a + l] = 0.0f;
+                buf_a[(loadr_a * 4 +  3) * BM + loadc_a + l] = 0.0f;
+                buf_a[(loadr_a * 4 + 16) * BM + loadc_a + l] = 0.0f;
+                buf_a[(loadr_a * 4 + 17) * BM + loadc_a + l] = 0.0f;
+                buf_a[(loadr_a * 4 + 18) * BM + loadc_a + l] = 0.0f;
+                buf_a[(loadr_a * 4 + 19) * BM + loadc_a + l] = 0.0f;
+            }
         }
 
         for (int l = 0; l < BN; l += loadstride_b) {
-            int idx = pos_b + (loadc_b + l) * stride_b / LOAD_VEC_B + loadr_b;
-            buf_b[(loadr_b * LOAD_VEC_B + 0) * BN + loadc_b + l] = src1[idx].s0;
-            buf_b[(loadr_b * LOAD_VEC_B + 1) * BN + loadc_b + l] = src1[idx].s1;
-            buf_b[(loadr_b * LOAD_VEC_B + 2) * BN + loadc_b + l] = src1[idx].s2;
-            buf_b[(loadr_b * LOAD_VEC_B + 3) * BN + loadc_b + l] = src1[idx].s3;
+            if (loadc_b + l < ne11) {
+                int idx = pos_b + (loadc_b + l) * stride_b / LOAD_VEC_B + loadr_b;
+                buf_b[(loadr_b * LOAD_VEC_B + 0) * BN + loadc_b + l] = src1[idx].s0;
+                buf_b[(loadr_b * LOAD_VEC_B + 1) * BN + loadc_b + l] = src1[idx].s1;
+                buf_b[(loadr_b * LOAD_VEC_B + 2) * BN + loadc_b + l] = src1[idx].s2;
+                buf_b[(loadr_b * LOAD_VEC_B + 3) * BN + loadc_b + l] = src1[idx].s3;
+            } else {
+                buf_b[(loadr_b * LOAD_VEC_B + 0) * BN + loadc_b + l] = 0.0f;
+                buf_b[(loadr_b * LOAD_VEC_B + 1) * BN + loadc_b + l] = 0.0f;
+                buf_b[(loadr_b * LOAD_VEC_B + 2) * BN + loadc_b + l] = 0.0f;
+                buf_b[(loadr_b * LOAD_VEC_B + 3) * BN + loadc_b + l] = 0.0f;
+            }
         }
 
         barrier(CLK_LOCAL_MEM_FENCE);
