@@ -7754,8 +7754,8 @@ static void ggml_cl_mul_mat_id(ggml_backend_t backend, const ggml_tensor * src0,
             if (true) { // condition todo
                 cl_int status;
 
-                size_t local_size[3] = {64, 4, 1};
-                size_t global_size[3] = {64, 4, 1};
+                size_t local_size[3] = {64, 2, 1};
+                size_t global_size[3] = {64, 2, 1};
 
                 cl_mem src1_sub_buffer, buf_src1_image, buf_src2;
 
@@ -7771,7 +7771,9 @@ static void ggml_cl_mul_mat_id(ggml_backend_t backend, const ggml_tensor * src0,
 
                     // set thread grid
                     global_size[0] = static_cast<size_t>(ne01);
+                    global_size[1] = 4;
                     global_size[2] = static_cast<size_t>(ne20);
+                    local_size[1] = 4;
                 } else { // for gemm
                     kernel = backend_ctx->kernel_gemm_moe_mxfp4_f32;
 

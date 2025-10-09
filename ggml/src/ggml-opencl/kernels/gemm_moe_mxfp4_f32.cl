@@ -3,7 +3,7 @@
 #pragma OPENCL EXTENSION cl_qcom_reqd_sub_group_size : enable
 
 #define QK_MXFP4 32
-#define N_SIMDGROUP 4
+#define N_SIMDGROUP 2
 #define SIMDGROUP_WIDTH 64
 #define TILE_SIZE 320
 
@@ -142,12 +142,12 @@ __kernel void kernel_gemm_moe_mxfp4_f32(
     // reduction in local memory, assumes #subgroups=4
     __local float reduceLM[SIMDGROUP_WIDTH * (N_SIMDGROUP - 1)];
     if (sgid == 1) reduceLM[SIMDGROUP_WIDTH * 0 + slid] = sum;
-    if (sgid == 2) reduceLM[SIMDGROUP_WIDTH * 1 + slid] = sum;
-    if (sgid == 3) reduceLM[SIMDGROUP_WIDTH * 2 + slid] = sum;
+    // if (sgid == 2) reduceLM[SIMDGROUP_WIDTH * 1 + slid] = sum;
+    // if (sgid == 3) reduceLM[SIMDGROUP_WIDTH * 2 + slid] = sum;
     barrier(CLK_LOCAL_MEM_FENCE);
     if (sgid == 0) sum += reduceLM[SIMDGROUP_WIDTH * 0 + slid];
-    if (sgid == 0) sum += reduceLM[SIMDGROUP_WIDTH * 1 + slid];
-    if (sgid == 0) sum += reduceLM[SIMDGROUP_WIDTH * 2 + slid];
+    // if (sgid == 0) sum += reduceLM[SIMDGROUP_WIDTH * 1 + slid];
+    // if (sgid == 0) sum += reduceLM[SIMDGROUP_WIDTH * 2 + slid];
 
     // 1 outputs per thread in subgroup 0
     if (sgid == 0) {
