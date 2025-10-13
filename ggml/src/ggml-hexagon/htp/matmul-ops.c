@@ -1089,8 +1089,8 @@ static void matmul(struct htp_matmul_type * mt,
 
     const uint8_t * restrict src0_row = (const uint8_t *) src0->data;
 
-// Prefill spad with src0 rows
-#pragma unroll(4)
+    // Prefill spad with src0 rows
+    #pragma unroll(4)
     for (uint32_t ir0 = src0_start_row; ir0 < src0_end_row_x2; ir0 += 2) {
         const int is0 = (ir0 - src0_start_row);
         if (is0 >= HTP_SPAD_SRC0_NROWS) {
@@ -1104,7 +1104,7 @@ static void matmul(struct htp_matmul_type * mt,
     for (uint32_t ir0 = src0_start_row; ir0 < src0_end_row_x2; ir0 += 2) {
         const uint8_t * ss0 = dma_queue_pop(dma_queue);
 
-#pragma unroll(2)
+        #pragma unroll(2)
         for (uint32_t ir1 = 0; ir1 < src1_nrows; ++ir1) {
             const uint8_t * restrict src1_col = (const uint8_t *) (src1_data + ir1 * src1_row_size);
             float * restrict dst_row          = (float *) (dst->data + (ir1 * dst_row_size));
@@ -1128,7 +1128,7 @@ static void matmul(struct htp_matmul_type * mt,
                        src0_row_size_padded, src0_row_size, 1);
         const uint8_t * ss0 = dma_queue_pop(dma_queue);
 
-#pragma unroll(2)
+        #pragma unroll(2)
         for (uint32_t ir1 = 0; ir1 < src1_nrows; ++ir1) {
             const uint8_t * restrict src1_col = (const uint8_t *) (src1_data + ir1 * src1_row_size);
             float * restrict dst_row          = (float *) (dst->data + (ir1 * dst_row_size));
@@ -1191,8 +1191,8 @@ static void matvec(struct htp_matmul_type * mt,
     const uint8_t * restrict src1_col = (const uint8_t *) src1_data;
     float * restrict dst_col          = (float *) dst->data;
 
-// Prefill spad with 2x src0 rows
-#pragma unroll(2)
+    // Prefill spad with 2x src0 rows
+    #pragma unroll(2)
     for (uint32_t ir0 = src0_start_row; ir0 < src0_end_row_x2; ir0 += 2) {
         const uint32_t is0 = (ir0 - src0_start_row);
         if (is0 >= HTP_SPAD_SRC0_NROWS) {
@@ -1305,8 +1305,8 @@ static void matmul_id(struct htp_matmul_type * mt,
 
         const uint8_t * src0_row = (const uint8_t *) src0->data + (0 + cur_a * nb02 + 0);
 
-// Prefill spad with src0 rows
-#pragma unroll(4)
+        // Prefill spad with src0 rows
+        #pragma unroll(4)
         for (uint32_t ir0 = src0_start_row; ir0 < src0_end_row_x2; ir0 += 2) {
             const int is0 = (ir0 - src0_start_row);
             if (is0 >= HTP_SPAD_SRC0_NROWS) {
@@ -1429,8 +1429,8 @@ static void matvec_id(struct htp_matmul_type * mt,
         const uint8_t * restrict src1_col = (const uint8_t *) src1_data;
         float * restrict dst_row          = (float *) (dst->data + ie1 * nb1);
 
-// Prefill spad with src0 rows
-#pragma unroll(4)
+        // Prefill spad with src0 rows
+        #pragma unroll(4)
         for (uint32_t ir0 = src0_start_row; ir0 < src0_end_row_x2; ir0 += 2) {
             const int is0 = (ir0 - src0_start_row);
             if (is0 >= HTP_SPAD_SRC0_NROWS) {

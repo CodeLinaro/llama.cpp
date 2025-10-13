@@ -25,8 +25,8 @@
         }
     },
 
-    { 
-        "name": "arm64-windows-snapdragon", 
+    {
+        "name": "arm64-windows-snapdragon",
         "inherits": [ "base", "arm64-windows-llvm" ],
         "cacheVariables": {
             "HEXAGON_SDK_ROOT": "$env{HEXAGON_SDK_ROOT}",
@@ -37,7 +37,7 @@
             "LLAMA_CURL":       "OFF"
         }
     },
- 
+
     { "name": "arm64-android-snapdragon-debug"  , "inherits": [ "base", "arm64-android-snapdragon", "debug" ] },
     { "name": "arm64-android-snapdragon-release", "inherits": [ "base", "arm64-android-snapdragon", "release" ] },
 

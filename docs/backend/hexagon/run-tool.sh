@@ -22,7 +22,7 @@ experimental=
 [ "$E" != "" ] && experimental="GGML_HEXAGON_EXPERIMENTAL=$V"
 
 sched=
-[ "$SCHED" != "" ] && sched="GGML_SCHED_DEBUG=2" cli_opts="$cli_opts -v" 
+[ "$SCHED" != "" ] && sched="GGML_SCHED_DEBUG=2" cli_opts="$cli_opts -v"
 
 profile=
 [ "$PROF" != "" ] && profile="GGML_HEXAGON_PROFILE=$PROF GGML_HEXAGON_OPSYNC=1"

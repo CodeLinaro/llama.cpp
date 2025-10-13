@@ -80,7 +80,7 @@ static inline void hvx_copy_fp16_aa(uint8_t * restrict dst, const uint8_t * rest
 
     uint32_t i = 0;
 
-#pragma unroll(4)
+    #pragma unroll(4)
     for (; i < nvec; i++) {
         HVX_Vector v = vsrc[i];
         vdst[i]      = v;
@@ -104,7 +104,7 @@ static inline void hvx_copy_fp16_ua(uint8_t * restrict dst, const uint8_t * rest
 
     uint32_t i = 0;
 
-#pragma unroll(4)
+    #pragma unroll(4)
     for (; i < nvec; i++) {
         HVX_Vector v = vsrc[i];
         vdst[i]      = v;
@@ -128,7 +128,7 @@ static inline void hvx_copy_fp16_au(uint8_t * restrict dst, const uint8_t * rest
 
     uint32_t i = 0;
 
-#pragma unroll(4)
+    #pragma unroll(4)
     for (; i < nvec; i++) {
         HVX_Vector v = vsrc[i];
         vdst[i]      = v;
@@ -153,7 +153,7 @@ static inline void hvx_copy_fp32_aa(uint8_t * restrict dst, const uint8_t * rest
 
     uint32_t i = 0;
 
-#pragma unroll(4)
+    #pragma unroll(4)
     for (; i < nvec; i++) {
         HVX_Vector v = vsrc[i];
         vdst[i]      = v;
@@ -177,7 +177,7 @@ static inline void hvx_copy_fp32_ua(uint8_t * restrict dst, const uint8_t * rest
 
     uint32_t i = 0;
 
-#pragma unroll(4)
+    #pragma unroll(4)
     for (; i < nvec; i++) {
         HVX_Vector v = vsrc[i];
         vdst[i]      = v;
@@ -201,7 +201,7 @@ static inline void hvx_copy_fp32_au(uint8_t * restrict dst, const uint8_t * rest
 
     uint32_t i = 0;
 
-#pragma unroll(4)
+    #pragma unroll(4)
     for (; i < nvec; i++) {
         HVX_Vector v = vsrc[i];
         vdst[i]      = v;
@@ -226,7 +226,7 @@ static inline void hvx_bcast_fp32_a(uint8_t * restrict dst, float elem, uint32_t
 
     uint32_t i = 0;
 
-#pragma unroll(4)
+    #pragma unroll(4)
     for (; i < nvec; i++) {
         vdst[i] = velem;
     }
@@ -926,7 +926,7 @@ static inline void hvx_fast_sigmoid_f32(const uint8_t * restrict src, uint8_t * 
     const HVX_Vector * restrict v_src = (HVX_Vector *) src;
     HVX_Vector * restrict v_dst       = (HVX_Vector *) dst;
 
-#pragma unroll(4)
+    #pragma unroll(4)
     for (int i = 0; i < step_of_1; i++) {
         v_dst[i] = hvx_vec_fast_sigmoid_fp32(v_src[i]);
     }

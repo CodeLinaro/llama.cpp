@@ -54,13 +54,13 @@ void hvx_mul_f32(const uint8_t * restrict src0,
         HVX_Vector * restrict vec_in2 = (HVX_Vector *) src1;
         HVX_Vector * restrict vec_out = (HVX_Vector *) dst;
 
-#pragma unroll(4)
+        #pragma unroll(4)
         for (int i = 0; i < num_elems_whole; i += VLEN_FP32) {
             HVX_Vector v = Q6_Vqf32_vmpy_VsfVsf(*vec_in1++, *vec_in2++);
             *vec_out++   = Q6_Vsf_equals_Vqf32(v);
         }
     } else {
-#pragma unroll(4)
+        #pragma unroll(4)
         for (int i = 0; i < num_elems_whole; i += VLEN_FP32) {
             HVX_Vector in1 = *(HVX_UVector *) (src0 + i * SIZEOF_FP32);
             HVX_Vector in2 = *(HVX_UVector *) (src1 + i * SIZEOF_FP32);
@@ -263,13 +263,13 @@ void hvx_add_f32(const uint8_t * restrict src0,
         HVX_Vector * restrict vec_in2 = (HVX_Vector *) src1;
         HVX_Vector * restrict vec_out = (HVX_Vector *) dst;
 
-#pragma unroll(4)
+        #pragma unroll(4)
         for (int i = 0; i < num_elems_whole; i += VLEN_FP32) {
             HVX_Vector v = Q6_Vqf32_vadd_VsfVsf(*vec_in1++, *vec_in2++);
             *vec_out++   = Q6_Vsf_equals_Vqf32(v);
         }
     } else {
-#pragma unroll(4)
+        #pragma unroll(4)
         for (int i = 0; i < num_elems_whole; i += VLEN_FP32) {
             HVX_Vector in1 = *(HVX_UVector *) (src0 + i * SIZEOF_FP32);
             HVX_Vector in2 = *(HVX_UVector *) (src1 + i * SIZEOF_FP32);
@@ -404,13 +404,13 @@ void hvx_add_scalar_f32(const uint8_t * restrict src, const float val, uint8_t *
         HVX_Vector * restrict vec_in1 = (HVX_Vector *) src;
         HVX_Vector * restrict vec_out = (HVX_Vector *) dst;
 
-#pragma unroll(4)
+        #pragma unroll(4)
         for (int i = 0; i < num_elems_whole; i += VLEN_FP32) {
             HVX_Vector v = Q6_Vqf32_vadd_VsfVsf(*vec_in1++, val_vec);
             *vec_out++   = Q6_Vsf_equals_Vqf32(v);
         }
     } else {
-#pragma unroll(4)
+        #pragma unroll(4)
         for (int i = 0; i < num_elems_whole; i += VLEN_FP32) {
             HVX_Vector in = *(HVX_UVector *) (src + i * SIZEOF_FP32);
 
@@ -453,13 +453,13 @@ void hvx_mul_scalar_f32(const uint8_t * restrict src, const float val, uint8_t *
         HVX_Vector * restrict vec_in1 = (HVX_Vector *) src;
         HVX_Vector * restrict vec_out = (HVX_Vector *) dst;
 
-#pragma unroll(4)
+        #pragma unroll(4)
         for (int i = 0; i < num_elems_whole; i += VLEN_FP32) {
             HVX_Vector v = Q6_Vqf32_vmpy_VsfVsf(*vec_in1++, val_vec);
             *vec_out++   = Q6_Vsf_equals_Vqf32(v);
         }
     } else {
-#pragma unroll(4)
+        #pragma unroll(4)
         for (int i = 0; i < num_elems_whole; i += VLEN_FP32) {
             HVX_Vector in = *(HVX_UVector *) (src + i * SIZEOF_FP32);
 
@@ -505,13 +505,13 @@ void hvx_sub_f32(const uint8_t * restrict src0,
         HVX_Vector * restrict vec_in2 = (HVX_Vector *) src1;
         HVX_Vector * restrict vec_out = (HVX_Vector *) dst;
 
-#pragma unroll(4)
+        #pragma unroll(4)
         for (int i = 0; i < num_elems_whole; i += VLEN_FP32) {
             HVX_Vector v = Q6_Vqf32_vsub_VsfVsf(*vec_in1++, *vec_in2++);
             *vec_out++   = Q6_Vsf_equals_Vqf32(v);
         }
     } else {
-#pragma unroll(4)
+        #pragma unroll(4)
         for (int i = 0; i < num_elems_whole; i += VLEN_FP32) {
             HVX_Vector in1 = *(HVX_UVector *) (src0 + i * SIZEOF_FP32);
             HVX_Vector in2 = *(HVX_UVector *) (src1 + i * SIZEOF_FP32);
@@ -646,13 +646,13 @@ void hvx_sub_scalar_f32(const uint8_t * restrict src, const float val, uint8_t *
         HVX_Vector * restrict vec_in1 = (HVX_Vector *) src;
         HVX_Vector * restrict vec_out = (HVX_Vector *) dst;
 
-#pragma unroll(4)
+        #pragma unroll(4)
         for (int i = 0; i < num_elems_whole; i += VLEN_FP32) {
             HVX_Vector v = Q6_Vqf32_vsub_VsfVsf(*vec_in1++, val_vec);
             *vec_out++   = Q6_Vsf_equals_Vqf32(v);
         }
     } else {
-#pragma unroll(4)
+        #pragma unroll(4)
         for (int i = 0; i < num_elems_whole; i += VLEN_FP32) {
             HVX_Vector in = *(HVX_UVector *) (src + i * SIZEOF_FP32);
 
@@ -688,7 +688,7 @@ float hvx_sum_of_squares_f32(const uint8_t * restrict src, const int num_elems) 
     HVX_Vector sum_vec_acc = Q6_V_vsplat_R(0x00000000);
     HVX_Vector zero_vec    = Q6_V_vsplat_R(0x00000000);
 
-#pragma unroll(4)
+    #pragma unroll(4)
     for (int i = 0; i < num_elems_whole; i += VLEN_FP32) {
         HVX_Vector v = Q6_Vqf32_vmpy_VsfVsf(*vec_in1, *vec_in1);
         sum_vec_acc  = Q6_Vqf32_vadd_Vqf32Vqf32(sum_vec_acc, v);
@@ -732,13 +732,13 @@ float hvx_self_sum_f32(const uint8_t * restrict src, const int num_elems) {
     if (0 == unaligned_loop) {
         HVX_Vector * vec_in = (HVX_Vector *) src;
 
-#pragma unroll(4)
+        #pragma unroll(4)
         for (int i = 0; i < num_elems_whole; i += VLEN_FP32) {
             // sum_vec = Q6_Vqf32_vadd_Vqf32Vsf(sum_vec, *vec_in++);
             sum_vec = Q6_Vqf32_vadd_VsfVsf(Q6_Vsf_equals_Vqf32(sum_vec), *vec_in++);
         }
     } else {
-#pragma unroll(4)
+        #pragma unroll(4)
         for (int i = 0; i < num_elems_whole; i += VLEN_FP32) {
             HVX_Vector in = *(HVX_UVector *) (src + i * SIZEOF_FP32);
 
@@ -781,13 +781,13 @@ void hvx_scale_f32(const uint8_t * restrict src, uint8_t * restrict dst, const i
         HVX_Vector * vec_in1 = (HVX_Vector *) src;
         HVX_Vector * vec_out = (HVX_Vector *) dst;
 
-#pragma unroll(4)
+        #pragma unroll(4)
         for (int i = 0; i < num_elems_whole; i += VLEN_FP32) {
             HVX_Vector v = Q6_Vqf32_vmpy_VsfVsf(*vec_in1++, scale_vec);
             *vec_out++   = Q6_Vsf_equals_Vqf32(v);
         }
     } else {
-#pragma unroll(4)
+        #pragma unroll(4)
         for (int i = 0; i < num_elems_whole; i += VLEN_FP32) {
             HVX_Vector in = *(HVX_UVector *) (src + i * SIZEOF_FP32);
 
@@ -830,12 +830,12 @@ float hvx_self_max_f32(const uint8_t * restrict src, const int num_elems) {
     if (0 == unaligned_loop) {
         HVX_Vector * restrict vec_in = (HVX_Vector *) src;
 
-#pragma unroll(4)
+        #pragma unroll(4)
         for (int i = 0; i < num_elems_whole; i += VLEN_FP32) {
             vec_max = Q6_Vsf_vmax_VsfVsf(vec_max, *vec_in++);
         }
     } else {
-#pragma unroll(4)
+        #pragma unroll(4)
         for (int i = 0; i < num_elems_whole; i += VLEN_FP32) {
             HVX_Vector in = *(HVX_UVector *) (src + i * SIZEOF_FP32);
 
@@ -873,7 +873,7 @@ void hvx_min_scalar_f32(const uint8_t * restrict src, const float val, uint8_t *
     HVX_Vector * restrict vec_in  = (HVX_Vector *) src;
     HVX_Vector * restrict vec_out = (HVX_Vector *) dst;
 
-#pragma unroll(4)
+    #pragma unroll(4)
     for (int i = 0; i < num_elems_whole; i += VLEN_FP32) {
         vec_min    = Q6_Vsf_vmin_VsfVsf(vec_min, *vec_in++);
         *vec_out++ = Q6_Vsf_equals_Vqf32(vec_min);
@@ -911,7 +911,7 @@ void hvx_clamp_scalar_f32(const uint8_t * restrict src,
     HVX_Vector range_left  = hvx_vec_splat_fp32(limit_left);
     HVX_Vector range_right = hvx_vec_splat_fp32(limit_right);
 
-#pragma unroll(4)
+    #pragma unroll(4)
     for (int i = 0; i < num_elems_whole; i += VLEN_FP32) {
         HVX_Vector in_vec = *vec_in++;
         HVX_Vector temp_v = in_vec;

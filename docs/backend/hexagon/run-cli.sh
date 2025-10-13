@@ -25,7 +25,7 @@ experimental=
 [ "$E" != "" ] && experimental="GGML_HEXAGON_EXPERIMENTAL=$E"
 
 sched=
-[ "$SCHED" != "" ] && sched="GGML_SCHED_DEBUG=2" cli_opts="$cli_opts -v" 
+[ "$SCHED" != "" ] && sched="GGML_SCHED_DEBUG=2" cli_opts="$cli_opts -v"
 
 profile=
 [ "$PROF" != "" ] && profile="GGML_HEXAGON_PROFILE=$PROF GGML_HEXAGON_OPSYNC=1"
@@ -47,6 +47,6 @@ adb $adbserial shell " \
     ADSP_LIBRARY_PATH=$basedir/$branch/lib \
     $verbose $experimental $sched $opmask $profile $nhvx $ndev           \
       ./$branch/bin/llama-cli --no-mmap -m $basedir/../gguf/$model       \
-        -t 4 --ctx-size 8192 --batch-size 128 -ctk q8_0 -ctv q8_0 -fa on \
-  	-ngl 99 --device $device $cli_opts $@ \
+         -t 4 --ctx-size 8192 --batch-size 128 -ctk q8_0 -ctv q8_0 -fa on \
+         -ngl 99 --device $device $cli_opts $@ \
 "

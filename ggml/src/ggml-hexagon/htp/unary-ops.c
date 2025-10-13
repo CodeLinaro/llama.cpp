@@ -58,7 +58,7 @@ static void hvx_fast_rms_norm_f32(const uint8_t * restrict src,
     HVX_Vector epsilon_v = hvx_vec_splat_fp32(epsilon);
 
     int step_of_1 = num_elems >> 5;
-#pragma unroll(4)
+    #pragma unroll(4)
     for (int i = 0; i < step_of_1; i++) {
         HVX_Vector v1 = v_src[i];
         HVX_Vector v2 = Q6_Vqf32_vmpy_VsfVsf(v1, v1);
@@ -75,7 +75,7 @@ static void hvx_fast_rms_norm_f32(const uint8_t * restrict src,
 
     HVX_Vector scale_v = hvx_vec_rsqrt_fp32(Q6_Vsf_equals_Vqf32(mean_epsilon_v));
 
-#pragma unroll(4)
+    #pragma unroll(4)
     for (int i = 0; i < step_of_1; i++) {
         HVX_Vector v1 = v_src[i];
         HVX_Vector v2 = Q6_Vqf32_vmpy_VsfVsf(v1, scale_v);

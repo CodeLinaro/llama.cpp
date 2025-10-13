@@ -105,7 +105,7 @@ static void hvx_fast_softmax_prep_f32(const uint8_t * restrict src,
 
     int step_of_1 = num_elems >> 5;
 
-#pragma unroll(4)
+    #pragma unroll(4)
     for (int i = 0; i < step_of_1; i++) {
         HVX_Vector v1 = *(HVX_Vector *) src_curr;
 
@@ -140,7 +140,7 @@ static void hvx_fast_softmax_f32(const uint8_t * restrict src,
 
     int step_of_1 = num_elems >> 5;
 
-#pragma unroll(4)
+    #pragma unroll(4)
     for (int i = 0; i < step_of_1; i++) {
         HVX_Vector v1 = v_src[i];
         max_vec       = Q6_Vsf_vmax_VsfVsf(max_vec, v1);
@@ -149,7 +149,7 @@ static void hvx_fast_softmax_f32(const uint8_t * restrict src,
     HVX_Vector v = hvx_vec_reduce_max_fp32(max_vec);
     max_vec      = hvx_vec_repl4(v);
 
-#pragma unroll(4)
+    #pragma unroll(4)
     for (int i = 0; i < step_of_1; i++) {
         HVX_Vector v1 = v_src[i];
         HVX_Vector v2 = Q6_Vqf32_vsub_VsfVsf(v1, max_vec);
@@ -168,7 +168,7 @@ static void hvx_fast_softmax_f32(const uint8_t * restrict src,
     HVX_Vector     v4        = hvx_vec_inverse_fp32(sum_vec);
     HVX_Vector     scale_vec = Q6_V_vmux_QVV(pos_sum, v4, one_v);
 
-#pragma unroll(4)
+    #pragma unroll(4)
     for (int i = 0; i < step_of_1; i++) {
         HVX_Vector v1 = v_pad[i];
         HVX_Vector v2 = Q6_Vqf32_vmpy_VsfVsf(v1, scale_vec);

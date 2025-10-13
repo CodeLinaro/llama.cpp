@@ -31,7 +31,7 @@ add_library(${HTP_LIB} SHARED
 )
 
 target_compile_definitions(${HTP_LIB} PRIVATE
-	$<IF:$<BOOL:${HEXAGON_HTP_DEBUG}>,HTP_DEBUG=1,NDEBUG=1>)
+    $<IF:$<BOOL:${HEXAGON_HTP_DEBUG}>,HTP_DEBUG=1,NDEBUG=1>)
 
 build_idl(htp_iface.idl ${HTP_LIB})
 
