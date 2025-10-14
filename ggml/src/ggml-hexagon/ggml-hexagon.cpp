@@ -2404,7 +2404,7 @@ static void ggml_hexagon_mul_mat_id(const struct ggml_tensor * op, uint32_t flag
 
     t2 = ggml_time_us();
 
-    HEX_VERBOSE(
+    HEX_PROFILE(
         "ggml-hex: %s matmul-id %s %u:%u:%u:%u x %s %u:%u:%u:%u (%s %u:%u:%u:%u) -> %s %u:%u:%u:%u : op-usec %u "
         "op-cycles %u op-pkts %u (%f) call-usec %llu\n",
         sess->name.c_str(), src0->name, (uint32_t) src0->ne[0], (uint32_t) src0->ne[1], (uint32_t) src0->ne[2],
@@ -3211,6 +3211,167 @@ static void ggml_backend_hexagon_synchronize(ggml_backend_t backend) {
     }
 }
 
+struct node_info {
+    ggml_tensor * node;
+
+    std::vector<ggml_tensor *> fused;
+
+    ggml_op op() const {
+        return node->op;
+    }
+
+    const ggml_tensor * dst() const {
+        return fused.empty() ? node : fused.back();
+    }
+
+    const ggml_tensor * src1() const {
+        return node->src[1];
+    }
+
+    bool is_empty() const {
+        return ggml_op_is_empty(node->op);
+    }
+
+    void add_fused(ggml_tensor * t) {
+        fused.push_back(t);
+    }
+
+    bool stackable() const {
+        switch (this->op()) {
+            case GGML_OP_MUL_MAT:
+            case GGML_OP_MUL_MAT_ID:
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    bool same_input(const node_info& n) const {
+        return n.src1() == this->src1();
+    }
+};
+
+static std::vector<int> ggml_hexagon_graph_optimize_reorder(const std::vector<node_info> & nodes) {
+    const int n = nodes.size();
+
+    std::vector<int> res;
+    res.reserve(n);
+
+    std::vector<bool> used(n, false);
+
+    // The main goal here is to stack the MUL_MAT ops with the same src1 input.
+    // This allows use to reuse dynamically quantized src1 in VTCM.
+
+    for (int i0 = 0; i0 < n; i0++) {
+        if (used[i0]) {
+            continue;
+        }
+
+        res.push_back(i0);
+
+        const auto & node0 = nodes[i0];
+
+        if (!node0.stackable()) {
+            continue;
+        }
+
+        // that many nodes forward to search for stackable nodes that can reuse VTCM
+        constexpr int N_FORWARD = 8;
+
+        for (int i1 = i0 + 1; i1 < i0 + N_FORWARD && i1 < n; i1++) {
+            if (used[i1]) {
+                continue;
+            }
+
+            const auto & node1 = nodes[i1];
+
+            if (node1.stackable() && node1.same_input(node0)) {
+                res.push_back(i1);
+                used[i1] = true;
+            }
+        }
+    }
+
+    return res;
+}
+
+static void ggml_backend_hexagon_graph_optimize(ggml_backend_t backend, ggml_cgraph * gf) {
+    auto sess = static_cast<ggml_hexagon_session *>(backend->context);
+    const int n = gf->n_nodes;
+
+    constexpr int MAX_FUSE = 16;
+
+    enum ggml_op ops[MAX_FUSE];
+
+    std::vector<node_info> nodes;
+    nodes.reserve(gf->n_nodes);
+
+    // fuse nodes:
+    // we don't want to make reorders that break fusing, so we first pack all fusable tensors
+    //   and perform the reorder over the fused nodes. after the reorder is done, we unfuse
+    for (int i = 0; i < n; i++) {
+        node_info node = {
+            /*.node =*/ gf->nodes[i],
+            /*.fused =*/ {},
+        };
+
+        // fuse only ops that start with these operations
+        // can be expanded when needed
+        if (node.op() == GGML_OP_ADD ||
+            node.op() == GGML_OP_NORM ||
+            node.op() == GGML_OP_RMS_NORM) {
+            ops[0] = node.op();
+
+            int f = i + 1;
+            while (f < n && f < i + MAX_FUSE) {
+                // conservatively allow fusing only these ops
+                // can be expanded when needed
+                if (gf->nodes[f]->op != GGML_OP_ADD &&
+                    gf->nodes[f]->op != GGML_OP_MUL &&
+                    gf->nodes[f]->op != GGML_OP_NORM &&
+                    gf->nodes[f]->op != GGML_OP_RMS_NORM) {
+                    break;
+                }
+                ops[f - i] = gf->nodes[f]->op;
+                f++;
+            }
+
+            f -= i;
+            for (; f > 1; f--) {
+                if (ggml_can_fuse(gf, i, ops, f)) {
+                    break;
+                }
+            }
+
+            // add the fused tensors into the node info so we can unfuse them later
+            for (int k = 1; k < f; k++) {
+                ++i;
+
+                // the .dst() becomes the last fused tensor
+                node.add_fused(gf->nodes[i]);
+            }
+        }
+
+        nodes.push_back(std::move(node));
+    }
+
+    const auto order = ggml_hexagon_graph_optimize_reorder(nodes);
+
+    // unfuse
+    {
+        int j = 0;
+        for (const auto i : order) {
+            const auto & node = nodes[i];
+
+            gf->nodes[j++] = node.node;
+
+            for (auto * fused : node.fused) {
+                gf->nodes[j++] = fused;
+            }
+        }
+    }
+}
+
 static struct ggml_backend_i hexagon_backend_i = {
     /* .get_name                = */ ggml_backend_hexagon_name,
     /* .free                    = */ ggml_backend_hexagon_free,
@@ -3225,7 +3386,7 @@ static struct ggml_backend_i hexagon_backend_i = {
     /* .graph_compute           = */ ggml_backend_hexagon_graph_compute,
     /* .event_record            = */ NULL,
     /* .event_wait              = */ NULL,
-    /* .graph_optimize          = */ NULL,
+    /* .graph_optimize          = */ ggml_backend_hexagon_graph_optimize,
 };
 
 static ggml_guid_t ggml_backend_hexagon_guid() {
