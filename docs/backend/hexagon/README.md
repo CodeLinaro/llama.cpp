@@ -8,7 +8,7 @@ This image includes Android NDK, OpenCL SDK, Hexagon SDK, CMake, etc.
 This method works on Linux, macOS, and Windows. macOS and Windows users should install Docker Desktop.
 
 ```
-~/src/llama.cpp$ docker run -it -u $(id -u):$(id -g) --volume $(pwd):/workspace --platform linux/amd64 ghcr.io/snapdragon-toolchain/arm64-android:v0.1
+~/src/llama.cpp$ docker run -it -u $(id -u):$(id -g) --volume $(pwd):/workspace --platform linux/amd64 ghcr.io/snapdragon-toolchain/arm64-android:v0.2
 [d]/> cd /workspace
 ```
 
@@ -106,7 +106,7 @@ Here are some examples of running various llama.cpp tools via ADB.
 Simple question for Llama-3.2-1B
 
 ```
-~/src/llama.cpp$ M=Llama-3.2-1B-Instruct-Q4_0.gguf D=HTP0 ./docs/backend/snapdragon/run-cli.sh -no-cnv -p "what is the most popular cookie in the world?"
+~/src/llama.cpp$ M=Llama-3.2-1B-Instruct-Q4_0.gguf D=HTP0 ./docs/backend/hexagon/run-cli.sh -no-cnv -p "what is the most popular cookie in the world?"
 ...
 ggml-hex: HTP arch version v79
 ggml-hex: allocating new session: HTP0
