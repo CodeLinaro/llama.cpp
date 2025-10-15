@@ -106,9 +106,10 @@ Here are some examples of running various llama.cpp tools via ADB.
 Simple question for Llama-3.2-1B
 
 ```
-~/src/llama.cpp$ M=Llama-3.2-1B-Instruct-Q4_0.gguf D=HTP0 ./docs/backend/hexagon/run-cli.sh -no-cnv -p "what is the most popular cookie in the world?"
+~/src/llama.cpp$ M=Llama-3.2-1B-Instruct-Q4_0.gguf D=HTP0 ./scripts/snapdragon/adb/run-cli.sh -no-cnv -p "what is the most popular cookie in the world?"
 ...
-ggml-hex: HTP arch version v79
+ggml-hex: Hexagon backend (experimental) : allocating new registry : ndev 1
+ggml-hex: Hexagon Arch version v79
 ggml-hex: allocating new session: HTP0
 ggml-hex: new session: HTP0 : session-id 0 domain-id 3 uri file:///libggml-htp-v79.so?htp_iface_skel_handle_invoke&_modver=1.0&_dom=cdsp&_session=0 handle 0xb4000072c7955e50
 ...
@@ -135,10 +136,10 @@ llama_memory_breakdown_print: |   - HTP0-REPACK        |                  504 = 
 Summary request for OLMoE-1B-7B. This is a large model that requires two HTP sessions/devices
 
 ```
-M=../gguf/OLMoE-1B-7B-0125-Instruct-Q4_0.gguf NDEV=2 D=HTP0,HTP1 docs/backend/hexagon/run-cli.sh -f surfing.txt -no-cnv
+~/src/llama.cpp$ M=OLMoE-1B-7B-0125-Instruct-Q4_0.gguf NDEV=2 D=HTP0,HTP1 ./scripts/snapdragon/adb/run-cli.sh -f surfing.txt -no-cnv
 ...
-ggml-hex: allocating new registry : ndev 2
-ggml-hex: HTP arch version v81
+ggml-hex: Hexagon backend (experimental) : allocating new registry : ndev 1
+ggml-hex: Hexagon Arch version v81
 ggml-hex: allocating new session: HTP0
 ggml-hex: allocating new session: HTP1
 ...
@@ -173,7 +174,7 @@ llama_memory_breakdown_print: |   - HTP0-REPACK        |                 2025 = 
 Op test for MUL_MAT
 
 ```
-~/src/llama.cpp$ HB=0 docs/backend/snapdragon/run-tool.sh test-backend-ops -b HTP0 -o MUL_MAT
+~/src/llama.cpp$ HB=0 ./scripts/snapdragon/adb/run-tool.sh test-backend-ops -b HTP0 -o MUL_MAT
 ...
 Backend 2/3: HTP0
 Device description: Hexagon
@@ -182,10 +183,10 @@ MUL_MAT(type_a=q4_0,type_b=f32,m=16,n=1,k=256,bs=[1,1],nr=[1,1],per=[0,1,2,3],v=
 MUL_MAT(type_a=q4_0,type_b=f32,m=16,n=2,k=256,bs=[1,1],nr=[1,1],per=[0,1,2,3],v=0,o=1): OK
 MUL_MAT(type_a=q4_0,type_b=f32,m=16,n=3,k=256,bs=[1,1],nr=[1,1],per=[0,1,2,3],v=0,o=1): OK
 
-~/src/llama.cpp-hexagon$ M=Llama-3.2-1B-Instruct-Q4_0.gguf docs/backend/hexagon/run-bench.sh -p 128 -n 64
+~/src/llama.cpp-hexagon$ M=Llama-3.2-1B-Instruct-Q4_0.gguf ./scripts/snapdragon/adb/run-bench.sh -p 128 -n 64
 ...
-ggml-hex: allocating new registry : ndev 1
-ggml-hex: HTP arch version v79
+ggml-hex: Hexagon backend (experimental) : allocating new registry : ndev 1
+ggml-hex: Hexagon Arch version v79
 ggml-hex: allocating new session: HTP0
 ggml-hex: new session: HTP0 : session-id 0 domain-id 3 uri file:///libggml-htp-v79.so?htp_iface_skel_handle_invoke&_modver=1.0&_dom=cdsp&_session=0 handle 0xb400007d4b231090
 | model          |       size | params | backend    | ngl | threads | n_batch | mmap |  test |           t/s |
