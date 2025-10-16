@@ -3189,6 +3189,10 @@ struct node_info {
         return fused.empty() ? node : fused.back();
     }
 
+    const ggml_tensor * src0() const {
+        return node->src[0];
+    }
+
     const ggml_tensor * src1() const {
         return node->src[1];
     }
@@ -3205,7 +3209,7 @@ struct node_info {
         switch (this->op()) {
             case GGML_OP_MUL_MAT:
             case GGML_OP_MUL_MAT_ID:
-                return true;
+                return ggml_is_quantized(this->src0()->type);
             default:
                 return false;
         }
