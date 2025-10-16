@@ -51,14 +51,8 @@ static int    opt_experimental = 0;
 static int opt_opmask = HTP_OPMASK_QUEUE | HTP_OPMASK_QUANTIZE | HTP_OPMASK_COMPUTE;
 static int opt_opsync = 0;  // synchronous ops
 
-#define HEX_VERBOSE(...)              \
-    if (opt_verbose) {                \
-        fprintf(stderr, __VA_ARGS__); \
-        fflush(stderr);               \
-    }
 #define HEX_PROFILE(...) \
-    if (opt_profile)     \
-    fprintf(stderr, __VA_ARGS__)
+    if (opt_profile) GGML_LOG_INFO(__VA_ARGS__)
 
 static inline uint64_t hex_is_aligned(void * addr, uint32_t align) {
     return ((size_t) addr & (align - 1)) == 0;
@@ -270,18 +264,16 @@ static void htp_packet_callback(dspqueue_t queue, AEEResult error, void * contex
         }
 
         if (err != 0) {
-            fprintf(stderr, "ggml-hex: dspqueue_read_noblock failed: 0x%08x\n", (unsigned) err);
-            exit(1);
+            GGML_ABORT("ggml-hex: dspqueue_read_noblock failed: 0x%08x\n", (unsigned) err);
         }
 
         // Basic sanity checks
         if (rsp_size != sizeof(rsp)) {
-            fprintf(stderr, "ggml-hex: dspcall : bad response (size)\n");
-            exit(1);
+            GGML_ABORT("ggml-hex: dspcall : bad response (size)\n");
         }
 
         if (rsp.status != HTP_STATUS_OK) {
-            fprintf(stderr, "ggml-hex: dspcall : dsp-rsp: %s\n", status_to_str(rsp.status));
+            GGML_LOG_ERROR("ggml-hex: dspcall : dsp-rsp: %s\n", status_to_str(rsp.status));
             // TODO: handle errors
         }
 
@@ -297,8 +289,7 @@ static void htp_packet_callback(dspqueue_t queue, AEEResult error, void * contex
 // Error callback - simply terminates with an error. Used where we don't
 // expect errors.
 [[noreturn]] static void htp_error_callback(dspqueue_t queue, AEEResult error, void * context) {
-    fprintf(stderr, "ggml-hex: dspcall general error 0x%x: for queue %p\n", error, (void *) queue);
-    exit(1);
+    GGML_ABORT("ggml-hex: dspcall general error 0x%x: for queue %p\n", error, (void *) queue);
 }
 
 // ** backend buffers
@@ -315,13 +306,13 @@ struct ggml_backend_hexagon_buffer_type_context {
 
 struct ggml_backend_hexagon_buffer_context {
     bool mmap_to(ggml_hexagon_session * s) {
-        HEX_VERBOSE("ggml-hex: %s mmaping buffer: base %p domain-id %d session-id %d size %zu fd %d repack %d\n",
+        GGML_LOG_DEBUG("ggml-hex: %s mmaping buffer: base %p domain-id %d session-id %d size %zu fd %d repack %d\n",
                     s->name.c_str(), (void *) this->base, s->domain_id, s->session_id, this->size, this->fd,
                     (int) this->repack);
 
         int err = fastrpc_mmap(s->domain_id, this->fd, (void *) this->base, 0, this->size, FASTRPC_MAP_FD);
         if (err != 0) {
-            fprintf(stderr, "ggml-hex: buffer mapping failed : domain_id %d size %zu fd %d error 0x%08x\n",
+            GGML_LOG_ERROR("ggml-hex: buffer mapping failed : domain_id %d size %zu fd %d error 0x%08x\n",
                     s->domain_id, this->size, this->fd, (unsigned) err);
             return false;
         }
@@ -354,19 +345,19 @@ struct ggml_backend_hexagon_buffer_context {
 
         this->base = (uint8_t *) rpcmem_alloc2(RPCMEM_HEAP_ID_SYSTEM, RPCMEM_DEFAULT_FLAGS | RPCMEM_HEAP_NOREG, size);
         if (!this->base) {
-            fprintf(stderr, "ggml-hex: %s failed to allocate buffer : size %zu\n", sess->name.c_str(), size);
+            GGML_LOG_ERROR("ggml-hex: %s failed to allocate buffer : size %zu\n", sess->name.c_str(), size);
             return;
         }
 
         this->fd = rpcmem_to_fd(this->base);
         if (this->fd < 0) {
-            fprintf(stderr, "ggml-hex: %s failed to get FD for buffer %p\n", sess->name.c_str(), (void *) this->base);
+            GGML_LOG_ERROR("ggml-hex: %s failed to get FD for buffer %p\n", sess->name.c_str(), (void *) this->base);
             rpcmem_free(this->base);
             this->base = NULL;
             return;
         }
 
-        HEX_VERBOSE("ggml-hex: %s allocated buffer: base %p size %zu fd %d repack %d\n", sess->name.c_str(),
+        GGML_LOG_DEBUG("ggml-hex: %s allocated buffer: base %p size %zu fd %d repack %d\n", sess->name.c_str(),
                     (void *) this->base, size, this->fd, (int) repack);
 
         this->sess   = sess;
@@ -409,7 +400,7 @@ static enum ggml_status ggml_backend_hexagon_buffer_init_tensor(ggml_backend_buf
     auto ctx  = static_cast<ggml_backend_hexagon_buffer_context *>(buffer->context);
     auto sess = ctx->sess;
 
-    HEX_VERBOSE("ggml-hex: %s init-tensor %s : base %p data %p nbytes %zu usage %d repack %d\n", sess->name.c_str(),
+    GGML_LOG_DEBUG("ggml-hex: %s init-tensor %s : base %p data %p nbytes %zu usage %d repack %d\n", sess->name.c_str(),
                 tensor->name, (void *) ctx->base, tensor->data, ggml_nbytes(tensor), (int) buffer->usage,
                 (int) ctx->repack);
 
@@ -436,7 +427,7 @@ static x2_q4 unpack_q4(uint8_t v) {
 }
 
 static void dump_block_q4_0(const block_q4_0 * b, int i) {
-    HEX_VERBOSE("ggml-hex: repack q4_0 %d: %d %d %d %d ... %d %d %d %d : %.6f\n", i, unpack_q4(b->qs[0]).v[0],
+    GGML_LOG_DEBUG("ggml-hex: repack q4_0 %d: %d %d %d %d ... %d %d %d %d : %.6f\n", i, unpack_q4(b->qs[0]).v[0],
                 unpack_q4(b->qs[1]).v[0], unpack_q4(b->qs[2]).v[0], unpack_q4(b->qs[3]).v[0], unpack_q4(b->qs[12]).v[1],
                 unpack_q4(b->qs[13]).v[1], unpack_q4(b->qs[14]).v[1], unpack_q4(b->qs[15]).v[1],
                 GGML_FP16_TO_FP32(b->d));
@@ -454,13 +445,13 @@ static void dump_packed_block_q4x4x2(const uint8_t * v, unsigned int i, size_t k
     const uint8_t *   q = v_q + i * qblk_size;
     const ggml_half * d = (const ggml_half *) (v_d + i * dblk_size);
 
-    HEX_VERBOSE("ggml-hex: repack q4x4x2-%d: %d %d %d %d ... %d %d %d %d ... %d %d %d %d : %.6f %.6f %.6f %.6f\n", i,
+    GGML_LOG_DEBUG("ggml-hex: repack q4x4x2-%d: %d %d %d %d ... %d %d %d %d ... %d %d %d %d : %.6f %.6f %.6f %.6f\n", i,
                 unpack_q4(q[0]).v[0], unpack_q4(q[1]).v[0], unpack_q4(q[2]).v[0], unpack_q4(q[3]).v[0],
                 unpack_q4(q[60]).v[0], unpack_q4(q[61]).v[0], unpack_q4(q[62]).v[0], unpack_q4(q[63]).v[0],
                 unpack_q4(q[124]).v[0], unpack_q4(q[125]).v[0], unpack_q4(q[126]).v[0], unpack_q4(q[127]).v[0],
                 GGML_FP16_TO_FP32(d[0]), GGML_FP16_TO_FP32(d[1]), GGML_FP16_TO_FP32(d[2]), GGML_FP16_TO_FP32(d[3]));
 
-    HEX_VERBOSE("ggml-hex: repack q4x4x2-%d: %d %d %d %d ... %d %d %d %d ... %d %d %d %d : %.6f %.6f %.6f %.6f\n",
+    GGML_LOG_DEBUG("ggml-hex: repack q4x4x2-%d: %d %d %d %d ... %d %d %d %d ... %d %d %d %d : %.6f %.6f %.6f %.6f\n",
                 i + 1, unpack_q4(q[0]).v[1], unpack_q4(q[1]).v[1], unpack_q4(q[2]).v[1], unpack_q4(q[3]).v[1],
                 unpack_q4(q[60]).v[1], unpack_q4(q[61]).v[1], unpack_q4(q[62]).v[1], unpack_q4(q[63]).v[1],
                 unpack_q4(q[124]).v[1], unpack_q4(q[125]).v[1], unpack_q4(q[126]).v[1], unpack_q4(q[127]).v[1],
@@ -669,7 +660,7 @@ static void repack_q4_0_q4x4x2(ggml_tensor * t, const void * data, size_t size) 
     void * buf_rp = ggml_aligned_malloc(row_size_rp);
     GGML_ASSERT(buf_rp != NULL);
 
-    HEX_VERBOSE("ggml-hex: repack-q4_0-q4x4x2 %s : data %p size %zu dims %ldx%ld row-size %zu\n", t->name, data, size,
+    GGML_LOG_DEBUG("ggml-hex: repack-q4_0-q4x4x2 %s : data %p size %zu dims %ldx%ld row-size %zu\n", t->name, data, size,
                 t->ne[0], nrows, row_size);
 
     init_row_q4x4x2((block_q4_0 *) buf_pd, t->ne[0]);  // init padded buffer to make sure the tail is all zeros
@@ -701,7 +692,7 @@ static void repack_q4x4x2_q4_0(void * data, const ggml_tensor * t, size_t size) 
     void * buf_rp = ggml_aligned_malloc(row_size_rp);
     GGML_ASSERT(buf_rp != NULL);
 
-    HEX_VERBOSE("ggml-hex: repack-q4x4x2-q4_0 %s : data %p size %zu dims %ldx%ld row-size %zu\n", t->name, data, size,
+    GGML_LOG_DEBUG("ggml-hex: repack-q4x4x2-q4_0 %s : data %p size %zu dims %ldx%ld row-size %zu\n", t->name, data, size,
                 t->ne[0], nrows, row_size);
 
     memset(buf_pd, 0, row_size_pd);  // clear-out padded buffer to make sure the tail is all zeros
@@ -721,7 +712,7 @@ static void repack_q4x4x2_q4_0(void * data, const ggml_tensor * t, size_t size) 
 
 // ======== Q8x4x2 ====================
 static void dump_block_q8_0(const block_q8_0 * b, int i) {
-    HEX_VERBOSE("ggml-hex: repack q8_0 %d: %d %d %d %d ... %d %d %d %d : %.6f\n", i, b->qs[0], b->qs[1], b->qs[2],
+    GGML_LOG_DEBUG("ggml-hex: repack q8_0 %d: %d %d %d %d ... %d %d %d %d : %.6f\n", i, b->qs[0], b->qs[1], b->qs[2],
                 b->qs[3], b->qs[28], b->qs[29], b->qs[30], b->qs[31], GGML_FP16_TO_FP32(b->d));
 }
 
@@ -737,11 +728,11 @@ static void dump_packed_block_q8x4x2(const uint8_t * v, unsigned int i, size_t k
     const uint8_t *   q = v_q + i * qblk_size;
     const ggml_half * d = (const ggml_half *) (v_d + i * dblk_size);
 
-    HEX_VERBOSE("ggml-hex: repack q8x4x2-%d: %d %d %d %d ... %d %d %d %d ... %d %d %d %d : %.6f %.6f %.6f %.6f\n", i,
+    GGML_LOG_DEBUG("ggml-hex: repack q8x4x2-%d: %d %d %d %d ... %d %d %d %d ... %d %d %d %d : %.6f %.6f %.6f %.6f\n", i,
                 q[0], q[1], q[2], q[3], q[60], q[61], q[62], q[63], q[124], q[125], q[126], q[127],
                 GGML_FP16_TO_FP32(d[0]), GGML_FP16_TO_FP32(d[1]), GGML_FP16_TO_FP32(d[2]), GGML_FP16_TO_FP32(d[3]));
 
-    HEX_VERBOSE("ggml-hex: repack q8x4x2-%d: %d %d %d %d ... %d %d %d %d ... %d %d %d %d : %.6f %.6f %.6f %.6f\n",
+    GGML_LOG_DEBUG("ggml-hex: repack q8x4x2-%d: %d %d %d %d ... %d %d %d %d ... %d %d %d %d : %.6f %.6f %.6f %.6f\n",
                 i + 1, q[128], q[129], q[130], q[131], q[192], q[193], q[194], q[195], q[252], q[253], q[254], q[255],
                 GGML_FP16_TO_FP32(d[4]), GGML_FP16_TO_FP32(d[5]), GGML_FP16_TO_FP32(d[6]), GGML_FP16_TO_FP32(d[7]));
 }
@@ -943,7 +934,7 @@ static void repack_q8_0_q8x4x2(ggml_tensor * t, const void * data, size_t size) 
     void * buf_rp = ggml_aligned_malloc(row_size_rp);
     GGML_ASSERT(buf_rp != NULL);
 
-    HEX_VERBOSE("ggml-hex: repack-q8_0-q8x4x2 %s : data %p size %zu dims %ldx%ld row-size %zu\n", t->name, data, size,
+    GGML_LOG_DEBUG("ggml-hex: repack-q8_0-q8x4x2 %s : data %p size %zu dims %ldx%ld row-size %zu\n", t->name, data, size,
                 t->ne[0], nrows, row_size);
 
     init_row_q8x4x2((block_q8_0 *) buf_pd, t->ne[0]);  // init padded buffer to make sure the tail is all zeros
@@ -975,7 +966,7 @@ static void repack_q8x4x2_q8_0(void * data, const ggml_tensor * t, size_t size) 
     void * buf_rp = ggml_aligned_malloc(row_size_rp);
     GGML_ASSERT(buf_rp != NULL);
 
-    HEX_VERBOSE("ggml-hex: repack-q8x4x2-q8_0 %s : data %p size %zu dims %ldx%ld row-size %zu\n", t->name, data, size,
+    GGML_LOG_DEBUG("ggml-hex: repack-q8x4x2-q8_0 %s : data %p size %zu dims %ldx%ld row-size %zu\n", t->name, data, size,
                 t->ne[0], nrows, row_size);
 
     memset(buf_pd, 0, row_size_pd);  // clear-out padded buffer to make sure the tail is all zeros
@@ -1006,7 +997,7 @@ static x2_mxfp4 unpack_mxfp4(uint8_t v) {
 }
 
 static void dump_block_mxfp4(const block_mxfp4 * b, int i) {
-    HEX_VERBOSE("ggml-hex: repack mxfp4 %d: %d %d %d %d ... %d %d %d %d : %.6f\n", i, unpack_mxfp4(b->qs[0]).v[0],
+    GGML_LOG_DEBUG("ggml-hex: repack mxfp4 %d: %d %d %d %d ... %d %d %d %d : %.6f\n", i, unpack_mxfp4(b->qs[0]).v[0],
                 unpack_mxfp4(b->qs[1]).v[0], unpack_mxfp4(b->qs[2]).v[0], unpack_mxfp4(b->qs[3]).v[0],
                 unpack_mxfp4(b->qs[12]).v[1], unpack_mxfp4(b->qs[13]).v[1], unpack_mxfp4(b->qs[14]).v[1],
                 unpack_mxfp4(b->qs[15]).v[1], GGML_E8M0_TO_FP32_HALF(b->e));
@@ -1024,14 +1015,14 @@ static void dump_packed_block_mxfp4x4x2(const uint8_t * v, unsigned int i, size_
     const uint8_t * q = v_q + i * qblk_size;
     const uint8_t * e = (const uint8_t *) (v_e + i * eblk_size);
 
-    HEX_VERBOSE("ggml-hex: repack mxfp4x4x2-%d: %d %d %d %d ... %d %d %d %d ... %d %d %d %d : %.6f %.6f %.6f %.6f\n", i,
+    GGML_LOG_DEBUG("ggml-hex: repack mxfp4x4x2-%d: %d %d %d %d ... %d %d %d %d ... %d %d %d %d : %.6f %.6f %.6f %.6f\n", i,
                 unpack_mxfp4(q[0]).v[0], unpack_mxfp4(q[1]).v[0], unpack_mxfp4(q[2]).v[0], unpack_mxfp4(q[3]).v[0],
                 unpack_mxfp4(q[60]).v[0], unpack_mxfp4(q[61]).v[0], unpack_mxfp4(q[62]).v[0], unpack_mxfp4(q[63]).v[0],
                 unpack_mxfp4(q[124]).v[0], unpack_mxfp4(q[125]).v[0], unpack_mxfp4(q[126]).v[0],
                 unpack_mxfp4(q[127]).v[0], GGML_E8M0_TO_FP32_HALF(e[0]), GGML_E8M0_TO_FP32_HALF(e[1]),
                 GGML_E8M0_TO_FP32_HALF(e[2]), GGML_E8M0_TO_FP32_HALF(e[3]));
 
-    HEX_VERBOSE("ggml-hex: repack mxfp4x4x2-%d: %d %d %d %d ... %d %d %d %d ... %d %d %d %d : %.6f %.6f %.6f %.6f\n",
+    GGML_LOG_DEBUG("ggml-hex: repack mxfp4x4x2-%d: %d %d %d %d ... %d %d %d %d ... %d %d %d %d : %.6f %.6f %.6f %.6f\n",
                 i + 1, unpack_mxfp4(q[0]).v[1], unpack_mxfp4(q[1]).v[1], unpack_mxfp4(q[2]).v[1],
                 unpack_mxfp4(q[3]).v[1], unpack_mxfp4(q[60]).v[1], unpack_mxfp4(q[61]).v[1], unpack_mxfp4(q[62]).v[1],
                 unpack_mxfp4(q[63]).v[1], unpack_mxfp4(q[124]).v[1], unpack_mxfp4(q[125]).v[1],
@@ -1242,7 +1233,7 @@ static void repack_mxfp4_mxfp4x4x2(ggml_tensor * t, const void * data, size_t si
     void * buf_rp = ggml_aligned_malloc(row_size_rp);
     GGML_ASSERT(buf_rp != NULL);
 
-    HEX_VERBOSE("ggml-hex: repack-mxfp4-mxfp4x4x2 %s : data %p size %zu dims %ldx%ld row-size %zu\n", t->name, data,
+    GGML_LOG_DEBUG("ggml-hex: repack-mxfp4-mxfp4x4x2 %s : data %p size %zu dims %ldx%ld row-size %zu\n", t->name, data,
                 size, t->ne[0], nrows, row_size);
 
     init_row_mxfp4x4x2((block_mxfp4 *) buf_pd, t->ne[0]);  // init padded buffer to make sure the tail is all zeros
@@ -1274,7 +1265,7 @@ static void repack_mxfp4x4x2_mxfp4(void * data, const ggml_tensor * t, size_t si
     void * buf_rp = ggml_aligned_malloc(row_size_rp);
     GGML_ASSERT(buf_rp != NULL);
 
-    HEX_VERBOSE("ggml-hex: repack-mxfp4x4x2-mxfp4 %s : data %p size %zu dims %ldx%ld row-size %zu\n", t->name, data,
+    GGML_LOG_DEBUG("ggml-hex: repack-mxfp4x4x2-mxfp4 %s : data %p size %zu dims %ldx%ld row-size %zu\n", t->name, data,
                 size, t->ne[0], nrows, row_size);
 
     memset(buf_pd, 0, row_size_pd);  // clear-out padded buffer to make sure the tail is all zeros
@@ -1300,7 +1291,7 @@ static void ggml_backend_hexagon_buffer_set_tensor(ggml_backend_buffer_t buffer,
     auto ctx  = (ggml_backend_hexagon_buffer_context *) buffer->context;
     auto sess = ctx->sess;
 
-    HEX_VERBOSE("ggml-hex: %s set-tensor %s : data %p offset %zu size %zu\n", sess->name.c_str(), tensor->name, data,
+    GGML_LOG_DEBUG("ggml-hex: %s set-tensor %s : data %p offset %zu size %zu\n", sess->name.c_str(), tensor->name, data,
                 offset, size);
 
     switch (tensor->type) {
@@ -1333,7 +1324,7 @@ static void ggml_backend_hexagon_buffer_get_tensor(ggml_backend_buffer_t buffer,
     auto ctx  = (ggml_backend_hexagon_buffer_context *) buffer->context;
     auto sess = ctx->sess;
 
-    HEX_VERBOSE("ggml-hex: %s get-tensor %s : data %p offset %zu size %zu\n", sess->name.c_str(), tensor->name, data,
+    GGML_LOG_DEBUG("ggml-hex: %s get-tensor %s : data %p offset %zu size %zu\n", sess->name.c_str(), tensor->name, data,
                 offset, size);
 
     switch (tensor->type) {
@@ -1364,7 +1355,7 @@ static bool ggml_backend_hexagon_buffer_cpy_tensor(ggml_backend_buffer_t      bu
     auto ctx  = (ggml_backend_hexagon_buffer_context *) buffer->context;
     auto sess = ctx->sess;
 
-    HEX_VERBOSE("ggml-hex: %s copy-tensor %s -> %s size %zu\n", sess->name.c_str(), src->name, dst->name,
+    GGML_LOG_DEBUG("ggml-hex: %s copy-tensor %s -> %s size %zu\n", sess->name.c_str(), src->name, dst->name,
                 ggml_nbytes(src));
 
     memcpy(dst->data, src->data, ggml_nbytes(src));
@@ -1376,7 +1367,7 @@ static bool ggml_backend_hexagon_buffer_cpy_tensor(ggml_backend_buffer_t      bu
 static void ggml_backend_hexagon_buffer_clear(ggml_backend_buffer_t buffer, uint8_t value) {
     auto ctx  = (ggml_backend_hexagon_buffer_context *) buffer->context;
     auto sess = ctx->sess;
-    HEX_VERBOSE("ggml-hex: %s clear-buff base %p size %zu\n", sess->name.c_str(), (void *) ctx->base, ctx->size);
+    GGML_LOG_DEBUG("ggml-hex: %s clear-buff base %p size %zu\n", sess->name.c_str(), (void *) ctx->base, ctx->size);
     memset(ctx->base, value, ctx->size);
 }
 
@@ -1467,12 +1458,11 @@ ggml_hexagon_session::ggml_hexagon_session(int dev_id) {
     this->prof_cycles = 0;
     this->prof_pkts   = 0;
 
-    fprintf(stderr, "ggml-hex: allocating new session: %s\n", this->name.c_str());
+    GGML_LOG_INFO("ggml-hex: allocating new session: %s\n", this->name.c_str());
 
     domain * my_domain = get_domain(this->domain_id);
     if (my_domain == NULL) {
-        fprintf(stderr, "ggml-hex: unable to get domain struct for CDSP\n");
-        exit(1);
+        GGML_ABORT("ggml-hex: unable to get domain struct for CDSP\n");
     }
 
     // Create new session
@@ -1485,9 +1475,7 @@ ggml_hexagon_session::ggml_hexagon_session(int dev_id) {
 
         int err = remote_session_control(FASTRPC_RESERVE_NEW_SESSION, (void *) &n, sizeof(n));
         if (err != AEE_SUCCESS) {
-            fprintf(stderr, "ggml-hex: remote_session_control failed to reserve new session %d : error 0x%x\n", dev_id,
-                    err);
-            exit(1);
+            GGML_ABORT("ggml-hex: remote_session_control failed to reserve new session %d : error 0x%x\n", dev_id, err);
         }
 
         // Save the IDs
@@ -1512,9 +1500,7 @@ ggml_hexagon_session::ggml_hexagon_session(int dev_id) {
 
         int err = remote_session_control(FASTRPC_GET_URI, (void *) &u, sizeof(u));
         if (err != AEE_SUCCESS) {
-            fprintf(stderr, "ggml-hex: remote_session_control failed to get URI for session %d : error 0x%x\n", dev_id,
-                    err);
-            exit(1);
+            GGML_ABORT("ggml-hex: remote_session_control failed to get URI for session %d : error 0x%x\n", dev_id, err);
         }
     }
 
@@ -1525,21 +1511,18 @@ ggml_hexagon_session::ggml_hexagon_session(int dev_id) {
         u.enable = 1;
         int err  = remote_session_control(DSPRPC_CONTROL_UNSIGNED_MODULE, (void *) &u, sizeof(u));
         if (err != AEE_SUCCESS) {
-            fprintf(stderr,
-                    "ggml-hex: remote_session_control failed to enable unsigned PD for session %d : error 0x%x\n",
+            GGML_ABORT("ggml-hex: remote_session_control failed to enable unsigned PD for session %d : error 0x%x\n",
                     dev_id, err);
-            exit(1);
         }
     }
 
     // Open session
     int err = htp_iface_open(session_uri, &this->handle);
     if (err != AEE_SUCCESS) {
-        fprintf(stderr, "ggml-hex: failed to open session %d : error 0x%x\n", dev_id, err);
-        exit(1);
+        GGML_ABORT("ggml-hex: failed to open session %d : error 0x%x\n", dev_id, err);
     }
 
-    fprintf(stderr, "ggml-hex: new session: %s : session-id %d domain-id %d uri %s handle 0x%lx\n", this->name.c_str(),
+    GGML_LOG_INFO("ggml-hex: new session: %s : session-id %d domain-id %d uri %s handle 0x%lx\n", this->name.c_str(),
             this->session_id, this->domain_id, session_uri, (unsigned long) this->handle);
 
     // Enable FastRPC QoS mode
@@ -1549,8 +1532,7 @@ ggml_hexagon_session::ggml_hexagon_session(int dev_id) {
 
         int err = remote_handle64_control(this->handle, DSPRPC_CONTROL_LATENCY, (void *) &l, sizeof(l));
         if (err != 0) {
-            fprintf(stderr, "ggml-hex: failed to enable fastrpc QOS mode: 0x%08x\n", (unsigned) err);
-            exit(1);
+            GGML_LOG_ERROR("ggml-hex: failed to enable fastrpc QOS mode: 0x%08x\n", (unsigned) err);
         }
     }
 
@@ -1564,22 +1546,19 @@ ggml_hexagon_session::ggml_hexagon_session(int dev_id) {
                           &queue);
 
     if (err != 0) {
-        fprintf(stderr, "ggml-hex: dspqueue_create failed: 0x%08x\n", (unsigned) err);
-        exit(1);
+        GGML_ABORT("ggml-hex: dspqueue_create failed: 0x%08x\n", (unsigned) err);
     }
 
     // Export queue for use on the DSP
     err = dspqueue_export(queue, &this->queue_id);
     if (err != 0) {
-        fprintf(stderr, "ggml-hex: dspqueue_export failed: 0x%08x\n", (unsigned) err);
-        exit(1);
+        GGML_ABORT("ggml-hex: dspqueue_export failed: 0x%08x\n", (unsigned) err);
     }
 
     if (opt_etm) {
         err = htp_iface_enable_etm(this->handle);
         if (err != 0) {
-            fprintf(stderr, "ggml-hex: failed to enable ETM tracing: 0x%08x\n", (unsigned) err);
-            exit(1);
+            GGML_LOG_ERROR("ggml-hex: failed to enable ETM tracing: 0x%08x\n", (unsigned) err);
         }
     }
 
@@ -1588,8 +1567,7 @@ ggml_hexagon_session::ggml_hexagon_session(int dev_id) {
     // listening for packets in a callback.
     err = htp_iface_start(this->handle, dev_id, this->queue_id, opt_nhvx);
     if (err != 0) {
-        fprintf(stderr, "ggml-hex: htp_iface_start failed: 0x%08x\n", (unsigned) err);
-        exit(1);
+        GGML_ABORT("ggml-hex: htp_iface_start failed: 0x%08x\n", (unsigned) err);
     }
 
     buffer_type.iface   = ggml_backend_hexagon_buffer_type_interface;
@@ -1600,26 +1578,24 @@ ggml_hexagon_session::ggml_hexagon_session(int dev_id) {
 }
 
 ggml_hexagon_session::~ggml_hexagon_session() {
-    fprintf(stderr, "ggml-hex: releasing session: %s\n", this->name.c_str());
+    GGML_LOG_INFO("ggml-hex: releasing session: %s\n", this->name.c_str());
 
     // Stop the DSP-side service and close the queue
     int err = htp_iface_stop(this->handle);
     if (err != 0) {
-        fprintf(stderr, "ggml-hex: htp_iface_stop failed: 0x%08x\n", (unsigned) err);
-        exit(1);
+        GGML_ABORT("ggml-hex: htp_iface_stop failed: 0x%08x\n", (unsigned) err);
     }
 
     if (opt_etm) {
         err = htp_iface_disable_etm(this->handle);
         if (err != 0) {
-            fprintf(stderr, "ggml-hex: warn : failed to disable ETM tracing: 0x%08x\n", (unsigned) err);
+            GGML_LOG_ERROR("ggml-hex: warn : failed to disable ETM tracing: 0x%08x\n", (unsigned) err);
         }
     }
 
     err = dspqueue_close(queue);
     if (err != 0) {
-        fprintf(stderr, "ggml-hex: dspqueue_close failed: 0x%08x\n", (unsigned) err);
-        exit(1);
+        GGML_ABORT("ggml-hex: dspqueue_close failed: 0x%08x\n", (unsigned) err);
     }
 
     htp_iface_close(this->handle);
@@ -2145,7 +2121,7 @@ static void hex_dump_dspbuf(const struct ggml_tensor * t, const dspqueue_buffer 
     auto buf  = static_cast<ggml_backend_hexagon_buffer_context *>(t->buffer->context);
     auto sess = buf->sess;
 
-    HEX_VERBOSE("ggml-hex: %s dspqbuf : %s base-addr %p base-size %zu data %p offset %u size %u\n", sess->name.c_str(),
+    GGML_LOG_DEBUG("ggml-hex: %s dspqbuf : %s base-addr %p base-size %zu data %p offset %u size %u\n", sess->name.c_str(),
                 t->name, (void *) buf->base, buf->size, (void *) d->ptr, (unsigned int) d->offset,
                 (unsigned int) d->size);
 }
@@ -2228,7 +2204,7 @@ static void ggml_hexagon_mul_mat(const struct ggml_tensor * op, uint32_t flags) 
         hex_format_op_buffs(buffs, op);
         hex_format_op_names(names, op);
 
-        HEX_VERBOSE("ggml-hex: %s %s: %s : %s : %s : %s : %s: flags 0x%x\n", sess->name.c_str(), ggml_op_name(op->op),
+        GGML_LOG_DEBUG("ggml-hex: %s %s: %s : %s : %s : %s : %s: flags 0x%x\n", sess->name.c_str(), ggml_op_name(op->op),
                     names, dims, types, strides, buffs, req.flags);
         if (opt_verbose > 1) {
             hex_dump_dspbuf(src0, &bufs[0]);
@@ -2251,8 +2227,7 @@ static void ggml_hexagon_mul_mat(const struct ggml_tensor * op, uint32_t flags) 
         );
 
         if (err != 0) {
-            fprintf(stderr, "ggml-hex: %s dspqueue_write failed: 0x%08x\n", sess->name.c_str(), (unsigned) err);
-            exit(1);
+            GGML_ABORT("ggml-hex: %s dspqueue_write failed: 0x%08x\n", sess->name.c_str(), (unsigned) err);
         }
     }
 
@@ -2366,7 +2341,7 @@ static void ggml_hexagon_mul_mat_id(const struct ggml_tensor * op, uint32_t flag
         hex_format_op_buffs(buffs, op);
         hex_format_op_names(names, op);
 
-        HEX_VERBOSE("ggml-hex: %s %s: %s : %s : %s : %s : %s: flags 0x%x\n", sess->name.c_str(), ggml_op_name(op->op),
+        GGML_LOG_DEBUG("ggml-hex: %s %s: %s : %s : %s : %s : %s: flags 0x%x\n", sess->name.c_str(), ggml_op_name(op->op),
                     names, dims, types, strides, buffs, req.flags);
 
         if (opt_verbose > 1) {
@@ -2391,8 +2366,7 @@ static void ggml_hexagon_mul_mat_id(const struct ggml_tensor * op, uint32_t flag
         );
 
         if (err != 0) {
-            fprintf(stderr, "ggml-hex: %s dspqueue_write failed: 0x%08x\n", sess->name.c_str(), (unsigned) err);
-            exit(1);
+            GGML_ABORT("ggml-hex: %s dspqueue_write failed: 0x%08x\n", sess->name.c_str(), (unsigned) err);
         }
     }
 
@@ -2453,8 +2427,7 @@ static void ggml_hexagon_binary(const struct ggml_tensor * op, uint32_t flags) {
             req.op = HTP_OP_SUB;
             break;
         default:
-            fprintf(stderr, "ggml-hex: unsupported op:%d\n", node->op);
-            exit(1);
+            GGML_ABORT("ggml-hex: binary : unsupported op:%d\n", node->op);
     }
 
     init_htp_tensor(&req.src0, src0);
@@ -2516,7 +2489,7 @@ static void ggml_hexagon_binary(const struct ggml_tensor * op, uint32_t flags) {
         hex_format_op_buffs(buffs, op);
         hex_format_op_names(names, op);
 
-        HEX_VERBOSE("ggml-hex: %s %s : %s : %s : %s : %s : %s : flags 0x%x\n", sess->name.c_str(),
+        GGML_LOG_DEBUG("ggml-hex: %s %s : %s : %s : %s : %s : %s : flags 0x%x\n", sess->name.c_str(),
                     ggml_op_name(node->op), names, dims, types, strides, buffs, req.flags);
         if (opt_verbose > 1) {
             hex_dump_dspbuf(src0, &bufs[0]);
@@ -2538,8 +2511,7 @@ static void ggml_hexagon_binary(const struct ggml_tensor * op, uint32_t flags) {
                                  1000000);                // Timeout
 
         if (0 != err) {
-            fprintf(stderr, "ggml-hex: %s dspqueue_write failed: 0x%08x\n", sess->name.c_str(), (unsigned) err);
-            exit(1);
+            GGML_ABORT("ggml-hex: %s dspqueue_write failed: 0x%08x\n", sess->name.c_str(), (unsigned) err);
         }
     }
 
@@ -2595,8 +2567,7 @@ static void ggml_hexagon_add_id(const struct ggml_tensor * op, uint32_t flags) {
             req.op = HTP_OP_ADD_ID;
             break;
         default:
-            fprintf(stderr, "ggml-hex: unsupported op:%d\n", node->op);
-            exit(1);
+            GGML_ABORT("ggml-hex: unsupported op:%d\n", node->op);
     }
 
     init_htp_tensor(&req.src0, src0);
@@ -2657,7 +2628,7 @@ static void ggml_hexagon_add_id(const struct ggml_tensor * op, uint32_t flags) {
         hex_format_op_buffs(buffs, op);
         hex_format_op_names(names, op);
 
-        HEX_VERBOSE("ggml-hex: %s %s : %s : %s : %s : %s : %s : flags 0x%x\n", sess->name.c_str(),
+        GGML_LOG_DEBUG("ggml-hex: %s %s : %s : %s : %s : %s : %s : flags 0x%x\n", sess->name.c_str(),
                     ggml_op_name(node->op), names, dims, types, strides, buffs, req.flags);
 
         if (opt_verbose > 1) {
@@ -2681,8 +2652,7 @@ static void ggml_hexagon_add_id(const struct ggml_tensor * op, uint32_t flags) {
                                  1000000);                // Timeout
 
         if (0 != err) {
-            fprintf(stderr, "ggml-hex: %s dspqueue_write failed: 0x%08x\n", sess->name.c_str(), (unsigned) err);
-            exit(1);
+            GGML_ABORT("ggml-hex: %s dspqueue_write failed: 0x%08x\n", sess->name.c_str(), (unsigned) err);
         }
     }
 
@@ -2755,8 +2725,7 @@ static void ggml_hexagon_unary(const struct ggml_tensor * op, uint32_t flags) {
     }
 
     if (!supported) {
-        fprintf(stderr, "ggml-hex: unsupported op:%d\n", op->op);
-        exit(1);
+        GGML_ABORT("ggml-hex: unary : unsupported op:%d\n", op->op);
     }
 
     init_htp_tensor(&req.dst, dst);
@@ -2839,7 +2808,7 @@ static void ggml_hexagon_unary(const struct ggml_tensor * op, uint32_t flags) {
         hex_format_op_buffs(buffs, op);
         hex_format_op_names(names, op);
 
-        HEX_VERBOSE("ggml-hex: %s %s : %s : %s : %s : %s : %s : flags 0x%x\n", sess->name.c_str(), ggml_op_name(op->op),
+        GGML_LOG_DEBUG("ggml-hex: %s %s : %s : %s : %s : %s : %s : flags 0x%x\n", sess->name.c_str(), ggml_op_name(op->op),
                     names, dims, types, strides, buffs, req.flags);
         if (opt_verbose > 1) {
             hex_dump_dspbuf(src0, &bufs[0]);
@@ -2865,8 +2834,7 @@ static void ggml_hexagon_unary(const struct ggml_tensor * op, uint32_t flags) {
                                  1000000);                // Timeout
 
         if (0 != err) {
-            fprintf(stderr, "ggml-hex: %s dspqueue_write failed: 0x%08x\n", sess->name.c_str(), (unsigned) err);
-            exit(1);
+            GGML_ABORT("ggml-hex: %s dspqueue_write failed: 0x%08x\n", sess->name.c_str(), (unsigned) err);
         }
     }
 
@@ -3013,7 +2981,7 @@ static void ggml_hexagon_rope(const struct ggml_tensor * op, uint32_t flags) {
         hex_format_op_buffs(buffs, op);
         hex_format_op_names(names, op);
 
-        HEX_VERBOSE("ggml-hex: %s %s : %s : %s : %s : %s : %s : flags 0x%x\n", sess->name.c_str(), ggml_op_name(op->op),
+        GGML_LOG_DEBUG("ggml-hex: %s %s : %s : %s : %s : %s : %s : flags 0x%x\n", sess->name.c_str(), ggml_op_name(op->op),
                     names, dims, types, strides, buffs, req.flags);
         if (opt_verbose > 1) {
             hex_dump_dspbuf(src0, &bufs[0]);
@@ -3039,8 +3007,7 @@ static void ggml_hexagon_rope(const struct ggml_tensor * op, uint32_t flags) {
                                  1000000);                // Timeout
 
         if (0 != err) {
-            fprintf(stderr, "ggml-hex: %s dspqueue_write failed: 0x%08x\n", sess->name.c_str(), (unsigned) err);
-            exit(1);
+            GGML_ABORT("ggml-hex: %s dspqueue_write failed: 0x%08x\n", sess->name.c_str(), (unsigned) err);
         }
     }
 
@@ -3117,7 +3084,7 @@ static inline int last_compute_op(ggml_cgraph * graph) {
 static ggml_status ggml_backend_hexagon_graph_compute(ggml_backend_t backend, ggml_cgraph * graph) {
     auto sess = static_cast<ggml_hexagon_session *>(backend->context);
 
-    HEX_VERBOSE("ggml-hex: %s graph-compute n_nodes %d\n", sess->name.c_str(), graph->n_nodes);
+    GGML_LOG_DEBUG("ggml-hex: %s graph-compute n_nodes %d\n", sess->name.c_str(), graph->n_nodes);
 
     const int last = last_compute_op(graph);
 
@@ -3186,9 +3153,7 @@ static ggml_status ggml_backend_hexagon_graph_compute(ggml_backend_t backend, gg
                 break;
 
             default:
-                fprintf(stderr, "\nggml-hex: %s not supported\n", ggml_op_desc(node));
-                fflush(stderr);
-                GGML_ASSERT(false);
+                GGML_ABORT("\nggml-hex: graph-compute %s is not supported\n", ggml_op_desc(node));
         }
     }
 
@@ -3203,7 +3168,7 @@ static ggml_status ggml_backend_hexagon_graph_compute(ggml_backend_t backend, gg
 static void ggml_backend_hexagon_synchronize(ggml_backend_t backend) {
     auto sess = static_cast<ggml_hexagon_session *>(backend->context);
 
-    HEX_VERBOSE("ggml-hex: %s synchronize\n", sess->name.c_str());
+    GGML_LOG_DEBUG("ggml-hex: %s synchronize\n", sess->name.c_str());
 
     // Wait until all pending ops complete
     while (sess->op_pending) {
@@ -3296,7 +3261,6 @@ static std::vector<int> ggml_hexagon_graph_optimize_reorder(const std::vector<no
 }
 
 static void ggml_backend_hexagon_graph_optimize(ggml_backend_t backend, ggml_cgraph * gf) {
-    auto sess = static_cast<ggml_hexagon_session *>(backend->context);
     const int n = gf->n_nodes;
 
     constexpr int MAX_FUSE = 16;
@@ -3536,7 +3500,7 @@ static bool ggml_backend_hexagon_device_supports_op(ggml_backend_dev_t dev, cons
         hex_format_op_buffs(buffs, op);
         hex_format_op_names(names, op);
 
-        HEX_VERBOSE("ggml-hex: %s device-supports-op %s : %s : %s : %s : %s : %s : (%d)\n", sess->name.c_str(),
+        GGML_LOG_DEBUG("ggml-hex: %s device-supports-op %s : %s : %s : %s : %s : %s : (%d)\n", sess->name.c_str(),
                     ggml_op_name(op->op), names, dims, types, strides, buffs, (int) supp);
     }
 
@@ -3556,14 +3520,14 @@ static bool ggml_backend_hexagon_device_supports_buft(ggml_backend_dev_t dev, gg
     // Need session/domain-id for buffers to be compatible
     bool supp = (s0->session_id == s1->session_id);
 
-    HEX_VERBOSE("ggml-hex: %s device-supports-buft %s (%d)\n", s0->name.c_str(), s1->name.c_str(), (int) supp);
+    GGML_LOG_DEBUG("ggml-hex: %s device-supports-buft %s (%d)\n", s0->name.c_str(), s1->name.c_str(), (int) supp);
 
     return supp;
 }
 
 static ggml_backend_buffer_type_t * ggml_backend_hexagon_device_get_extra_buffers_type(ggml_backend_dev_t dev) {
     auto s0 = static_cast<ggml_hexagon_session *>(dev->context);
-    HEX_VERBOSE("ggml-hex: device-get-extra-buft : %s \n", s0->name.c_str());
+    GGML_LOG_DEBUG("ggml-hex: device-get-extra-buft : %s \n", s0->name.c_str());
 
     static ggml_backend_buffer_type_t bufts[2];
     bufts[0] = ggml_backend_hexagon_device_get_repack_buffer_type(dev);
@@ -3601,17 +3565,17 @@ struct ggml_hexagon_registry {
 };
 
 ggml_hexagon_registry::ggml_hexagon_registry(ggml_backend_reg_t reg) {
-    fprintf(stderr, "ggml-hex: Hexagon backend (experimental) : allocating new registry : ndev %zu\n", opt_ndev);
+    GGML_LOG_INFO("ggml-hex: Hexagon backend (experimental) : allocating new registry : ndev %zu\n", opt_ndev);
 
     if (!opt_arch) {
         int err = get_hex_arch_ver(CDSP_DOMAIN_ID, &opt_arch);
         if (err != 0) {
-            fprintf(stderr, "ggml-hex: failed to query HTP version (err %d) defaulting to v73\n", err);
+            GGML_LOG_ERROR("ggml-hex: failed to query HTP version (err %d) defaulting to v73\n", err);
             opt_arch = 73;
         }
     }
 
-    fprintf(stderr, "ggml-hex: Hexagon Arch version v%d\n", opt_arch);
+    GGML_LOG_INFO("ggml-hex: Hexagon Arch version v%d\n", opt_arch);
 
     // Create devices / sessions
     for (size_t i = 0; i < opt_ndev; i++) {
@@ -3622,7 +3586,7 @@ ggml_hexagon_registry::ggml_hexagon_registry(ggml_backend_reg_t reg) {
 }
 
 ggml_hexagon_registry::~ggml_hexagon_registry() {
-    fprintf(stderr, "ggml-hex: releasing registry\n");
+    GGML_LOG_INFO("ggml-hex: releasing registry\n");
 
     // Release devices / sessions
     for (size_t i = 0; i < opt_ndev; i++) {
@@ -3708,7 +3672,7 @@ static void ggml_hexagon_init(ggml_backend_reg * reg) {
 
     reg->context = new ggml_hexagon_registry(reg);
 
-    HEX_VERBOSE("ggml-hex: size-of-general-req %zu size-of-general-rsp %zu\n", sizeof(struct htp_general_req),
+    GGML_LOG_DEBUG("ggml-hex: size-of-general-req %zu size-of-general-rsp %zu\n", sizeof(struct htp_general_req),
                 sizeof(struct htp_general_rsp));
 }
 

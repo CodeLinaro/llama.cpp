@@ -3,6 +3,12 @@
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
 #pragma clang diagnostic ignored "-Wsign-compare"
 
+#define GGML_COMMON_IMPL_C
+#include "ggml-backend-impl.h"
+#include "ggml-common.h"
+#include "ggml-hexagon.h"
+#include "ggml-impl.h"
+
 #include "htp-utils.h"
 
 #include <domain.h>
@@ -71,20 +77,20 @@ int get_domains_info(char * domain_type, int * num_domains, fastrpc_domain ** do
     if (remote_system_request) {
         nErr = remote_system_request(&req);
         if (nErr != AEE_SUCCESS) {
-            printf("Failure in remote_system_request call: %d.\n", nErr);
+            GGML_LOG_ERROR("Failure in remote_system_request call: %d.\n", nErr);
             goto bail;
         }
         // Allocate memory for domain-info array
         req.sys.max_domains = req.sys.num_domains;
         if ((req.sys.domains = calloc(req.sys.num_domains, sizeof(fastrpc_domain))) == NULL) {
             nErr = AEE_ENOMEMORY;
-            printf("Unable to allocate memory for req.sys.domains");
+            GGML_LOG_ERROR("Unable to allocate memory for req.sys.domains");
             goto bail;
         }
 
         nErr = remote_system_request(&req);
         if (nErr != AEE_SUCCESS) {
-            printf("Failure in remote_system_request call: %d.\n", nErr);
+            GGML_LOG_ERROR("Failure in remote_system_request call: %d.\n", nErr);
             goto bail;
         }
 
@@ -93,7 +99,7 @@ int get_domains_info(char * domain_type, int * num_domains, fastrpc_domain ** do
             domain = &req.sys.domains[i];
             if (domain->type != ss_info && domain_type != NULL) {
                 nErr = -1;
-                printf("Incorrect data received from remote_system_request.\n");
+                GGML_LOG_ERROR("Incorrect data received from remote_system_request.\n");
                 goto bail;
             }
         }
@@ -120,7 +126,7 @@ int get_effective_domain_id(char * domain_name, int session_id, int * effec_doma
 
     err = remote_session_control(FASTRPC_GET_EFFECTIVE_DOMAIN_ID, &sess, sizeof(sess));
     if (err) {
-        printf("Error 0x%x: failed to get effective domain id for %s, session id %d\n", err, sess.domain_name,
+        GGML_LOG_ERROR("Error 0x%x: failed to get effective domain id for %s, session id %d\n", err, sess.domain_name,
                session_id);
         return err;
     }
@@ -137,7 +143,7 @@ int get_dsp_support(int * domain) {
         struct remote_dsp_capability dsp_capability_domain = { CDSP_DOMAIN_ID, DOMAIN_SUPPORT, 0 };
         nErr = remote_handle_control(DSPRPC_GET_DSP_INFO, &dsp_capability_domain, sizeof(struct remote_dsp_capability));
         if ((nErr & 0xFF) == (AEE_EUNSUPPORTEDAPI & 0xFF)) {
-            printf("\nFastRPC Capability API is not supported on this device\n");
+            GGML_LOG_ERROR("\nFastRPC Capability API is not supported on this device\n");
             goto bail;
         }
 
@@ -153,12 +159,12 @@ int get_dsp_support(int * domain) {
         }
 
         if (nErr != AEE_SUCCESS) {
-            printf("\nget_dsp_support failed with Error 0x%x\n", nErr);
+            GGML_LOG_ERROR("\nget_dsp_support failed with Error 0x%x\n", nErr);
             goto bail;
         }
     } else {
         nErr = AEE_EUNSUPPORTEDAPI;
-        printf("remote_dsp_capability interface is not supported on this device\n");
+        GGML_LOG_ERROR("remote_dsp_capability interface is not supported on this device\n");
     }
 
 bail:
@@ -172,7 +178,7 @@ int get_vtcm_info(int domain, uint32_t * capability, uint32_t attr) {
     if (attr == VTCM_PAGE || attr == VTCM_COUNT) {
     } else {
         nErr = AEE_EBADPARM;
-        printf("Unsupported attr. Only VTCM_PAGE and VTCM_COUNT supported\n");
+        GGML_LOG_ERROR("Unsupported attr. Only VTCM_PAGE and VTCM_COUNT supported\n");
         goto bail;
     }
     if (remote_handle_control) {
@@ -188,24 +194,24 @@ int get_vtcm_info(int domain, uint32_t * capability, uint32_t attr) {
             nErr                                 = remote_handle_control(DSPRPC_GET_DSP_INFO, &dsp_capability_vtcm_dsp,
                                                                          sizeof(struct remote_dsp_capability));
             if ((nErr & 0xFF) == (AEE_EUNSUPPORTEDAPI & 0xFF)) {
-                printf("\nFastRPC Capability API is not supported on this device\n");
-                printf("Running the usecase without checking the capability\n");
+                GGML_LOG_ERROR("\nFastRPC Capability API is not supported on this device\n");
+                GGML_LOG_ERROR("Running the usecase without checking the capability\n");
                 nErr = AEE_SUCCESS;
                 goto bail;
             } else if (nErr == AEE_SUCCESS) {
                 *capability = dsp_capability_vtcm_dsp.capability;
             } else {
-                printf("\nget_vtcm_info failed with Error 0x%x\n", nErr);
+                GGML_LOG_ERROR("\nget_vtcm_info failed with Error 0x%x\n", nErr);
                 goto bail;
             }
         } else {
             nErr = AEE_EUNSUPPORTED;
-            printf("Unsupported domain %d\n", domain);
+            GGML_LOG_ERROR("Unsupported domain %d\n", domain);
             goto bail;
         }
     } else {
         nErr = AEE_EUNSUPPORTEDAPI;
-        printf("remote_dsp_capability interface is not supported on this device\n");
+        GGML_LOG_ERROR("remote_dsp_capability interface is not supported on this device\n");
     }
 
 bail:
@@ -218,11 +224,11 @@ bool is_unsignedpd_supported(int domain_id) {
         struct remote_dsp_capability dsp_capability_domain = { domain_id, UNSIGNED_PD_SUPPORT, 0 };
         nErr = remote_handle_control(DSPRPC_GET_DSP_INFO, &dsp_capability_domain, sizeof(struct remote_dsp_capability));
         if ((nErr & 0xFF) == (AEE_EUNSUPPORTEDAPI & 0xFF)) {
-            printf("\nFastRPC Capability API is not supported on this device. Falling back to signed pd.\n");
+            GGML_LOG_ERROR("\nFastRPC Capability API is not supported on this device. Falling back to signed pd.\n");
             return false;
         }
         if (nErr) {
-            printf("\nERROR 0x%x: FastRPC Capability API failed. Falling back to signed pd.", nErr);
+            GGML_LOG_ERROR("\nERROR 0x%x: FastRPC Capability API failed. Falling back to signed pd.", nErr);
             return false;
         }
         if (dsp_capability_domain.capability == 1) {
@@ -230,7 +236,7 @@ bool is_unsignedpd_supported(int domain_id) {
         }
     } else {
         nErr = AEE_EUNSUPPORTEDAPI;
-        printf("remote_dsp_capability interface is not supported on this device. Falling back to signed pd.\n");
+        GGML_LOG_ERROR("remote_dsp_capability interface is not supported on this device. Falling back to signed pd.\n");
         return false;
     }
     return false;
@@ -255,25 +261,25 @@ bool is_async_fastrpc_supported(int domain) {
             nErr = remote_handle_control(DSPRPC_GET_DSP_INFO, &dsp_capability_async_support,
                                          sizeof(struct remote_dsp_capability));
             if ((nErr & 0xFF) == (AEE_EUNSUPPORTEDAPI & 0xFF)) {
-                printf("\nFastRPC Capability API is not supported on this device\n");
-                printf("Running the usecase without checking the capability\n");
+                GGML_LOG_ERROR("\nFastRPC Capability API is not supported on this device\n");
+                GGML_LOG_ERROR("Running the usecase without checking the capability\n");
                 nErr = AEE_SUCCESS;
                 goto bail;
             } else if (dsp_capability_async_support.capability == 1) {
                 return true;
             }
             if (nErr != AEE_SUCCESS) {
-                printf("\nis_async_fastrpc_supported failed with Error 0x%x\n", nErr);
+                GGML_LOG_ERROR("\nis_async_fastrpc_supported failed with Error 0x%x\n", nErr);
                 goto bail;
             }
         } else {
             nErr = AEE_EUNSUPPORTED;
-            printf("Async fastrpc is not supported on domain %d\n", domain);
+            GGML_LOG_ERROR("Async fastrpc is not supported on domain %d\n", domain);
             goto bail;
         }
     } else {
         nErr = AEE_EUNSUPPORTEDAPI;
-        printf("remote_dsp_capability interface is not supported on this device\n");
+        GGML_LOG_ERROR("remote_dsp_capability interface is not supported on this device\n");
     }
 
 bail:
@@ -295,20 +301,20 @@ bool is_status_notification_supported(int domain) {
         nErr = remote_handle_control(DSPRPC_GET_DSP_INFO, &dsp_capability_status_notification_support,
                                      sizeof(struct remote_dsp_capability));
         if ((nErr & 0xFF) == (AEE_EUNSUPPORTEDAPI & 0xFF)) {
-            printf("\nFastRPC Capability API is not supported on this device\n");
-            printf("Running the usecase without checking the capability\n");
+            GGML_LOG_ERROR("\nFastRPC Capability API is not supported on this device\n");
+            GGML_LOG_ERROR("Running the usecase without checking the capability\n");
             nErr = AEE_SUCCESS;
             goto bail;
         } else if (dsp_capability_status_notification_support.capability == 1) {
             return true;
         }
         if (nErr != AEE_SUCCESS) {
-            printf("\nis_status_notification_supported failed with Error 0x%x\n", nErr);
+            GGML_LOG_ERROR("\nis_status_notification_supported failed with Error 0x%x\n", nErr);
             goto bail;
         }
     } else {
         nErr = AEE_EUNSUPPORTEDAPI;
-        printf("remote_dsp_capability interface is not supported on this device\n");
+        GGML_LOG_ERROR("remote_dsp_capability interface is not supported on this device\n");
     }
 
 bail:
@@ -321,7 +327,7 @@ int get_hmx_support_info(int domain, uint32_t * capability, uint32_t attr) {
 
     if (attr != HMX_SUPPORT_SPATIAL && attr != HMX_SUPPORT_DEPTH) {
         nErr = AEE_EBADPARM;
-        printf("Unsupported attr. Only HMX_SUPPORT_SPATIAL and HMX_SUPPORT_DEPTH supported\n");
+        GGML_LOG_ERROR("Unsupported attr. Only HMX_SUPPORT_SPATIAL and HMX_SUPPORT_DEPTH supported\n");
         goto bail;
     }
     if (remote_handle_control) {
@@ -337,24 +343,24 @@ int get_hmx_support_info(int domain, uint32_t * capability, uint32_t attr) {
             nErr                                = remote_handle_control(DSPRPC_GET_DSP_INFO, &dsp_capability_hmx_dsp,
                                                                         sizeof(struct remote_dsp_capability));
             if ((nErr & 0xFF) == (AEE_EUNSUPPORTEDAPI & 0xFF)) {
-                printf("\nFastRPC Capability API is not supported on this device\n");
-                printf("Running the usecase without checking the capability\n");
+                GGML_LOG_ERROR("\nFastRPC Capability API is not supported on this device\n");
+                GGML_LOG_ERROR("Running the usecase without checking the capability\n");
                 nErr = AEE_SUCCESS;
                 goto bail;
             } else if (nErr == AEE_SUCCESS) {
                 *capability = dsp_capability_hmx_dsp.capability;
             } else {
-                printf("\nget_hmx_support_info failed with Error 0x%x\n", nErr);
+                GGML_LOG_ERROR("\nget_hmx_support_info failed with Error 0x%x\n", nErr);
                 goto bail;
             }
         } else {
             nErr = AEE_EUNSUPPORTED;
-            printf("HMX support is not there for domain %d\n", domain);
+            GGML_LOG_ERROR("HMX support is not there for domain %d\n", domain);
             goto bail;
         }
     } else {
         nErr = AEE_EUNSUPPORTEDAPI;
-        printf("remote_dsp_capability interface is not supported on this device\n");
+        GGML_LOG_ERROR("remote_dsp_capability interface is not supported on this device\n");
     }
 
 bail:
@@ -363,7 +369,7 @@ bail:
 
 int get_hex_arch_ver(int domain, int * arch) {
     if (!remote_handle_control) {
-        fprintf(stderr, "ggml-hex: remote_handle_control is not supported on this device\n");
+        GGML_LOG_ERROR("ggml-hex: remote_handle_control is not supported on this device\n");
         return AEE_EUNSUPPORTEDAPI;
     }
 
@@ -374,12 +380,12 @@ int get_hex_arch_ver(int domain, int * arch) {
 
     int err = remote_handle_control(DSPRPC_GET_DSP_INFO, &arch_ver, sizeof(arch_ver));
     if ((err & 0xff) == (AEE_EUNSUPPORTEDAPI & 0xff)) {
-        fprintf(stderr, "ggml-hex: FastRPC capability API is not supported on this device\n");
+        GGML_LOG_ERROR("ggml-hex: FastRPC capability API is not supported on this device\n");
         return AEE_EUNSUPPORTEDAPI;
     }
 
     if (err != AEE_SUCCESS) {
-        fprintf(stderr, "ggml-hex: FastRPC capability query failed (err %d)\n", err);
+        GGML_LOG_ERROR("ggml-hex: FastRPC capability query failed (err %d)\n", err);
         return err;
     }
 
@@ -417,24 +423,24 @@ int get_hvx_support_info(int domain, uint32_t * capability, uint32_t attr) {
             nErr                                = remote_handle_control(DSPRPC_GET_DSP_INFO, &dsp_capability_hvx_dsp,
                                                                         sizeof(struct remote_dsp_capability));
             if ((nErr & 0xFF) == (AEE_EUNSUPPORTEDAPI & 0xFF)) {
-                printf("\nFastRPC Capability API is not supported on this device\n");
-                printf("Running the usecase without checking the capability\n");
+                GGML_LOG_ERROR("\nFastRPC Capability API is not supported on this device\n");
+                GGML_LOG_ERROR("Running the usecase without checking the capability\n");
                 nErr = AEE_SUCCESS;
                 goto bail;
             } else if (nErr == AEE_SUCCESS) {
                 *capability = dsp_capability_hvx_dsp.capability;
             } else {
-                printf("\nget_hvx_support_info failed with Error 0x%x\n", nErr);
+                GGML_LOG_ERROR("\nget_hvx_support_info failed with Error 0x%x\n", nErr);
                 goto bail;
             }
         } else {
             nErr = AEE_EUNSUPPORTED;
-            printf("HVX support is not available on domain %d\n", domain);
+            GGML_LOG_ERROR("HVX support is not available on domain %d\n", domain);
             goto bail;
         }
     } else {
         nErr = AEE_EUNSUPPORTEDAPI;
-        printf("remote_dsp_capability interface is not supported on this device\n");
+        GGML_LOG_ERROR("remote_dsp_capability interface is not supported on this device\n");
     }
 
 bail:

@@ -3,8 +3,7 @@ include(${HEXAGON_SDK_ROOT}/build/cmake/hexagon_fun.cmake)
 option(GGML_HEXAGON_HTP_DEBUG "ggml-hexagon: enable HTP debug output" OFF)
 
 add_library(htp_iface OBJECT
-    ${CMAKE_CURRENT_BINARY_DIR}/htp_iface_stub.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/htp-utils.c)
+    ${CMAKE_CURRENT_BINARY_DIR}/htp_iface_stub.c)
 
 set_target_properties(htp_iface PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_include_directories(htp_iface PUBLIC
@@ -28,7 +27,8 @@ link_custom_library(htp_iface cdsprpc)
 link_custom_library(htp_iface rpcmem)
 
 set(TARGET_NAME ggml-hexagon)
-ggml_add_backend_library(${TARGET_NAME} ggml-hexagon.cpp ../../include/ggml-hexagon.h)
+ggml_add_backend_library(${TARGET_NAME}
+    ggml-hexagon.cpp htp-utils.c htp-utils.h ../../include/ggml-hexagon.h)
 
 target_link_libraries(${TARGET_NAME} PRIVATE htp_iface)
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/htp ${CMAKE_CURRENT_BINARY_DIR})
