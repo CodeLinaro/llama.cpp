@@ -3231,6 +3231,9 @@ static std::vector<int> ggml_hexagon_graph_optimize_reorder(const std::vector<no
     // The main goal here is to stack the MUL_MAT ops with the same src1 input.
     // This allows use to reuse dynamically quantized src1 in VTCM.
 
+    // TODO: the current version might do incorrect reodering in cases where quantized src0
+    //       input is an output of another Op.
+
     for (int i0 = 0; i0 < n; i0++) {
         if (used[i0]) {
             continue;
