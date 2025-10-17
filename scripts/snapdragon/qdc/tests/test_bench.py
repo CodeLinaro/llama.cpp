@@ -1,4 +1,6 @@
-import pytest,subprocess,sys
+import pytest
+import subprocess
+import sys
 
 tmp_path='/data/local/tmp'
 pkg_path=f'{tmp_path}/llama.cpp'
@@ -23,10 +25,9 @@ def test_install():
 
 ## Basic cli tests
 def run_llama_cli(dev, opts):
-    run_cmd([ 'adb', 'shell',
-        f'{cli_pref}/llama-cli -m {model} --device {dev} -ngl 99 --batch-size 128 -n 128 -t 4 -no-cnv --seed 42 {opts} ' +
-        f'-p "what is the most popular cookie in the world?\nPlease provide a very brief bullet point summary.\nBegin your answer with **BEGIN**."'
-        ])
+    prompt='what is the most popular cookie in the world?\nPlease provide a very brief bullet point summary.\nBegin your answer with **BEGIN**.'
+    opts = '--batch-size 128 -n 128 -no-cnv --seed 42 ' + opts
+    run_cmd(['adb', 'shell', f'{cli_pref}/llama-cli -m {model} --device {dev} -ngl 99 -t 4 {opts} -p "{prompt}"'])
 
 
 @pytest.mark.dependency(depends=['test_install'])
