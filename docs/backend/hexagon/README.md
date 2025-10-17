@@ -8,7 +8,7 @@ This image includes Android NDK, OpenCL SDK, Hexagon SDK, CMake, etc.
 This method works on Linux, macOS, and Windows. macOS and Windows users should install Docker Desktop.
 
 ```
-~/src/llama.cpp$ docker run -it -u $(id -u):$(id -g) --volume $(pwd):/workspace --platform linux/amd64 ghcr.io/snapdragon-toolchain/arm64-android:v0.2
+~/src/llama.cpp$ docker run -it -u $(id -u):$(id -g) --volume $(pwd):/workspace --platform linux/amd64 ghcr.io/snapdragon-toolchain/arm64-android:v0.3
 [d]/> cd /workspace
 ```
 
@@ -26,7 +26,7 @@ Preset CMake variables:
   GGML_HEXAGON="ON"
   GGML_OPENCL="ON"
   GGML_OPENMP="OFF"
-  HEXAGON_SDK_ROOT="/opt/hexagon/6.3.0.0"
+  HEXAGON_SDK_ROOT="/opt/hexagon/6.4.0.2"
 ...
 -- Including OpenCL backend
 -- Including Hexagon backend
@@ -49,19 +49,19 @@ Preset CMake variables:
 To generate an installable "package" simply use cmake --install:
 
 ```
-[d]/workspace> cmake --install build-snapdragon --prefix pkg-snapdragon
+[d]/workspace> cmake --install build-snapdragon --prefix pkg-adb/llama.cpp
 -- Install configuration: "Release"
--- Installing: /workspace/pkg-snapdragon/lib/libggml-cpu.so
--- Installing: /workspace/pkg-snapdragon/lib/libggml-opencl.so
--- Installing: /workspace/pkg-snapdragon/lib/libggml-hexagon.so
--- Installing: /workspace/pkg-snapdragon/lib/libggml-htp-v73.so
--- Installing: /workspace/pkg-snapdragon/lib/libggml-htp-v75.so
--- Installing: /workspace/pkg-snapdragon/lib/libggml-htp-v79.so
--- Installing: /workspace/pkg-snapdragon/lib/libggml-htp-v81.so
--- Installing: /workspace/pkg-snapdragon/lib/libggml.so
+-- Installing: /workspace/pkg-adb/llama.cpp/lib/libggml-cpu.so
+-- Installing: /workspace/pkg-adb/llama.cpp/lib/libggml-opencl.so
+-- Installing: /workspace/pkg-adb/llama.cpp/lib/libggml-hexagon.so
+-- Installing: /workspace/pkg-adb/llama.cpp/lib/libggml-htp-v73.so
+-- Installing: /workspace/pkg-adb/llama.cpp/lib/libggml-htp-v75.so
+-- Installing: /workspace/pkg-adb/llama.cpp/lib/libggml-htp-v79.so
+-- Installing: /workspace/pkg-adb/llama.cpp/lib/libggml-htp-v81.so
+-- Installing: /workspace/pkg-adb/llama.cpp/lib/libggml.so
 ...
--- Installing: /workspace/pkg-snapdragon/bin/llama-bench
--- Installing: /workspace/pkg-snapdragon/bin/llama-cli
+-- Installing: /workspace/pkg-adb/llama.cpp/bin/llama-bench
+-- Installing: /workspace/pkg-adb/llama.cpp/bin/llama-cli
 ...
 ```
 
@@ -74,10 +74,10 @@ Once ADB is enabled, use `adb push` to install `pkg-snapdragon` on the device.
 **Note that the toolchain Docker image doesn't have ADB and doesn't set up the ADB bridge. Please use native ADB on the host.**
 
 ```
-~/src/llama.cpp$ adb push pkg-snapdragon/* /data/local/tmp/llama.cpp
-pkg-snapdragon/bin/: 67 files pushed, 0 skipped. 190.2 MB/s (919095042 bytes in 4.607s)
-pkg-snapdragon/include/: 19 files pushed, 0 skipped. 20.5 MB/s (255173 bytes in 0.012s)
-pkg-snapdragon/lib/: 16 files pushed, 0 skipped. 144.4 MB/s (43801382 bytes in 0.289s)
+~/src/llama.cpp$ adb push pkg-adb/llama.cpp /data/local/tmp/
+pkg-adb/llama.cpp/bin/: 67 files pushed, 0 skipped. 190.2 MB/s (919095042 bytes in 4.607s)
+pkg-adb/llama.cpp/include/: 19 files pushed, 0 skipped. 20.5 MB/s (255173 bytes in 0.012s)
+pkg-adb/llama.cpp/lib/: 16 files pushed, 0 skipped. 144.4 MB/s (43801382 bytes in 0.289s)
 102 files pushed, 0 skipped. 186.9 MB/s (963151597 bytes in 4.914s)
 ```
 

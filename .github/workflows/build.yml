@@ -1347,7 +1347,7 @@ jobs:
         id: install_hexsdk
         if: ${{ matrix.build == 'arm64-snapdragon' }}
         env:
-          HEXSDK_VER: 6.3.0
+          HEXSDK_VER: 6.4.0.2
           HEXTLS_VER: 19.0.04
         run: |
           curl -L -o hex-sdk.tar.gz https://github.com/snapdragon-toolchain/hexagon-sdk/releases/download/v$HEXSDK_VER/hexagon-sdk-v$HEXSDK_VER-amd64-lnx.tar.xz
@@ -1355,8 +1355,8 @@ jobs:
           tar -xaf hex-sdk.tar.gz -C hex-sdk
           ls -l hex-sdk
           sudo mv hex-sdk /opt/hexagon
-          echo "HEXAGON_SDK_ROOT=/opt/hexagon/$HEXSDK_VER.0"                                   >> "$GITHUB_ENV"
-          echo "HEXAGON_TOOLS_ROOT=/opt/hexagon/$HEXSDK_VER.0/tools/HEXAGON_Tools/$HEXTLS_VER" >> "$GITHUB_ENV"
+          echo "HEXAGON_SDK_ROOT=/opt/hexagon/$HEXSDK_VER"                                     >> "$GITHUB_ENV"
+          echo "HEXAGON_TOOLS_ROOT=/opt/hexagon/$HEXSDK_VER/tools/HEXAGON_Tools/$HEXTLS_VER"   >> "$GITHUB_ENV"
           echo "DEFAULT_HLOS_ARCH=64"                                                          >> "$GITHUB_ENV"
           echo "DEFAULT_TOOLS_VARIANT=toolv19"                                                 >> "$GITHUB_ENV"
           echo "DEFAULT_NO_QURT_INC=0"                                                         >> "$GITHUB_ENV"
@@ -1373,7 +1373,7 @@ jobs:
         run: |
           cmake ${{ matrix.defines }} -B build
           cmake --build build
-          cmake --install build --prefix pkg
+          cmake --install build --prefix pkg-adb/llama.cpp
 
       - name: Test
         id: cmake_test

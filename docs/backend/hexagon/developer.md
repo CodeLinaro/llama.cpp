@@ -14,14 +14,14 @@ The Hexagon backend consist of two parts:
 Here is an example of the build artifacts
 
 ```
-~/src/llama.cpp$ ls -l pkg-snapdragon/lib/libggml*
-pkg-snapdragon/lib/libggml-base.so
-pkg-snapdragon/lib/libggml-cpu.so
-pkg-snapdragon/lib/libggml-hexagon.so      <<< CPU library
-pkg-snapdragon/lib/libggml-htp-v73.so      <<< HTP op/kernels for Hexagon v73
-pkg-snapdragon/lib/libggml-htp-v75.so
-pkg-snapdragon/lib/libggml-htp-v79.so
-pkg-snapdragon/lib/libggml-htp-v81.so
+~/src/llama.cpp$ ls -l pkg-adb/llama.cpp/lib/libggml*
+pkg-adb/llama.cpp/lib/libggml-base.so
+pkg-adb/llama.cpp/lib/libggml-cpu.so
+pkg-adb/llama.cpp/lib/libggml-hexagon.so      <<< CPU library
+pkg-adb/llama.cpp/lib/libggml-htp-v73.so      <<< HTP op/kernels for Hexagon v73
+pkg-adb/llama.cpp/lib/libggml-htp-v75.so
+pkg-adb/llama.cpp/lib/libggml-htp-v79.so
+pkg-adb/llama.cpp/lib/libggml-htp-v81.so
 ```
 
 ## Memory buffers
@@ -49,7 +49,7 @@ Each Hexagon device behaves like a GPU from the offload and model splitting pers
 Here is an example of running GPT-OSS-20B model on a newer Snapdragon device with 16GB of DDR.
 
 ```
-M=gpt-oss-20b-Q4_0.gguf NDEV=4 D=HTP0,HTP1,HTP2,HTP3 P=surfing.txt docs/backend/hexagon/run-cli.sh -no-cnv -f surfing.txt -n 32
+M=gpt-oss-20b-Q4_0.gguf NDEV=4 D=HTP0,HTP1,HTP2,HTP3 P=surfing.txt scripts/snapdragon/adb/run-cli.sh -no-cnv -f surfing.txt -n 32
 ...
 LD_LIBRARY_PATH=/data/local/tmp/llama.cpp/lib
 ADSP_LIBRARY_PATH=/data/local/tmp/llama.cpp/lib
