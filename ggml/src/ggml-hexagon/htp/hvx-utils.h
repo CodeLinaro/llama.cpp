@@ -405,6 +405,23 @@ static inline HVX_Vector hvx_vec_qf32_reduce_sum(HVX_Vector in) {
     return hvx_vec_qf32_reduce_sum_n(in, 32);
 }
 
+static inline HVX_Vector hvx_vec_fp32_reduce_sum_n(HVX_Vector in, unsigned int n) {
+    unsigned int total = n * 4;  // total vec nbytes
+    unsigned int width = 4;      // fp32 nbytes
+
+    HVX_Vector sum = in, sum_t;
+    while (width < total) {
+        sum_t = Q6_V_vror_VR(sum, width);       // rotate right
+        sum   = Q6_Vsf_equals_Vqf32(Q6_Vqf32_vadd_VsfVsf(sum, sum_t)); // elementwise sum
+        width = width << 1;
+    }
+    return sum;
+}
+
+static inline HVX_Vector hvx_vec_fp32_reduce_sum(HVX_Vector in) {
+    return hvx_vec_fp32_reduce_sum_n(in, 32);
+}
+
 static inline HVX_Vector hvx_vec_reduce_max_fp16(HVX_Vector in) {
     unsigned total = 128;  // total vec nbytes
     unsigned width = 2;    // fp16 nbytes
