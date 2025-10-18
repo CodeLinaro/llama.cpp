@@ -464,12 +464,12 @@ static void vec_dot_q4x4x2_q8x4x2_rx2(const int n,
         r1_sum = Q6_Vqf32_vadd_Vqf32Vqf32(r1_sum, r1_fa);
     }
 
-    // Reduce and convert into fp32
-    r0_sum = hvx_vec_qf32_reduce_sum(r0_sum);
-    r1_sum = hvx_vec_qf32_reduce_sum(r1_sum);
+    // Convert into fp32 and reduce
+    r0_sum = hvx_vec_fp32_reduce_sum(Q6_Vsf_equals_Vqf32(r0_sum));
+    r1_sum = hvx_vec_fp32_reduce_sum(Q6_Vsf_equals_Vqf32(r1_sum));
+    HVX_VectorPair p0 = Q6_W_vshuff_VVR(r1_sum, r0_sum, 4);
 
-    hvx_vec_store_u(&s[0], 4, Q6_Vsf_equals_Vqf32(r0_sum));
-    hvx_vec_store_u(&s[1], 4, Q6_Vsf_equals_Vqf32(r1_sum));
+    hvx_vec_store_u(&s[0], 8, Q6_V_lo_W(p0));
 }
 
 static void vec_dot_q8x4x2_q8x4x2(const int n, float * restrict s, const void * restrict vx, const void * restrict vy) {
@@ -637,12 +637,12 @@ static void vec_dot_q8x4x2_q8x4x2_rx2(const int n,
         r1_sum = Q6_Vqf32_vadd_Vqf32Vqf32(r1_sum, r1_fa);
     }
 
-    // Reduce and convert into fp32
-    r0_sum = hvx_vec_qf32_reduce_sum(r0_sum);
-    r1_sum = hvx_vec_qf32_reduce_sum(r1_sum);
+    // Convert into fp32 and reduce
+    r0_sum = hvx_vec_fp32_reduce_sum(Q6_Vsf_equals_Vqf32(r0_sum));
+    r1_sum = hvx_vec_fp32_reduce_sum(Q6_Vsf_equals_Vqf32(r1_sum));
+    HVX_VectorPair p0 = Q6_W_vshuff_VVR(r1_sum, r0_sum, 4);
 
-    hvx_vec_store_u(&s[0], 4, Q6_Vsf_equals_Vqf32(r0_sum));
-    hvx_vec_store_u(&s[1], 4, Q6_Vsf_equals_Vqf32(r1_sum));
+    hvx_vec_store_u(&s[0], 8, Q6_V_lo_W(p0));
 }
 
 static void vec_dot_mxfp4x4x2_q8x4x2(const int n,
@@ -879,12 +879,12 @@ static void vec_dot_mxfp4x4x2_q8x4x2_rx2(const int n,
         r1_sum = Q6_Vqf32_vadd_Vqf32Vqf32(r1_sum, r1_fa);
     }
 
-    // Reduce and convert into fp32
-    r0_sum = hvx_vec_qf32_reduce_sum(r0_sum);
-    r1_sum = hvx_vec_qf32_reduce_sum(r1_sum);
+    // Convert into fp32 and reduce
+    r0_sum = hvx_vec_fp32_reduce_sum(Q6_Vsf_equals_Vqf32(r0_sum));
+    r1_sum = hvx_vec_fp32_reduce_sum(Q6_Vsf_equals_Vqf32(r1_sum));
+    HVX_VectorPair p0 = Q6_W_vshuff_VVR(r1_sum, r0_sum, 4);
 
-    hvx_vec_store_u(&s[0], 4, Q6_Vsf_equals_Vqf32(r0_sum));
-    hvx_vec_store_u(&s[1], 4, Q6_Vsf_equals_Vqf32(r1_sum));
+    hvx_vec_store_u(&s[0], 8, Q6_V_lo_W(p0));
 }
 
 #if 1
